@@ -1,0 +1,28 @@
+[package]
+name = "rupta"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "*"
+arrayvec = "*"
+cargo_metadata = "*"
+clap = "3.2"
+env_logger = "*"
+humantime = "*"
+itertools = "*"
+lazy_static = "*"
+log = "*"
+log-derive = "*"
+libc = "*"
+nom = "*"
+serde_json = "*"
+rayon = "~1.6.0"
+rayon-core = "~1.10.0"
+regex = "*"
+rpds = { version = "*", features = ["serde"] }
+rustc_tools_util = "*"
+petgraph = "*"
+shellwords = "*"

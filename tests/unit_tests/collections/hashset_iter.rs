@@ -1,0 +1,32 @@
+// Copyright (c) 2024 <Wei Li>.
+//
+// This source code is licensed under the GNU license found in the
+// LICENSE file in the root directory of this source tree.
+//
+// A test of hashset.
+
+use std::collections::HashSet;
+
+#[derive(Eq, Hash, PartialEq, Copy, Clone)]
+struct Foo<'f> {
+    f: &'f u32,
+}
+
+fn main() {
+    let a = 1;
+    let b = 2;
+    let c = 3;
+
+    let x = Foo { f: &a };
+    let y = Foo { f: &b };
+    let z = Foo { f: &c };
+
+    let mut set = HashSet::new();
+    set.insert(x);
+    set.insert(y);
+    set.insert(z);
+
+    for x in set.iter() {
+        let _v = *x;
+    }
+}
