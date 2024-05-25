@@ -24,7 +24,6 @@ The associated paper titled [*A Context-Sensitive Pointer Analysis Framework for
     $ cargo build
     ```
 
-
 ## Usage
 
 Before using this tool, make sure your Rust project compiles without any errors or warnings.
@@ -44,7 +43,6 @@ $ target/debug/pta <path-to-file> --entry <entry-function-name> --pta-type <pta-
 * `dump-pts` dumps the points-to result to the given path.
 * `dump-mir` dumps the mir of reachable functions.
 
-
 ## LOG
 
 Set `PTA_LOG` environment variable to enable logging:
@@ -61,7 +59,26 @@ You may encounter error while loading shared libraries: librustc_driver.so, try 
 $ export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib:$LD_LIBRARY_PATH
 ```
 
-
 ## License
 
 See [LICENSE](LICENSE)
+
+## Reference
+
+We have released the RUPTA source code with the hope that it will benefit others. Please acknowledge the use of this tool by citing the following paper:
+
+```
+@inproceedings{li2024context,
+  title={A Context-Sensitive Pointer Analysis Framework for Rust and Its Application to Call Graph Construction},
+  author={Li, Wei and He, Dongjie and Gui, Yujiang and Chen, Wenguang and Xue, Jingling},
+  booktitle={Proceedings of the 33rd ACM SIGPLAN International Conference on Compiler Construction},
+  pages={60--72},
+  year={2024},
+  publisher={ACM},
+  doi = {10.1145/3640537.3641574}
+}
+```
+
+## Contacts
+
+Any comments, contributions and collaborations are welcomed. Please contact the authors Wei Li (<liwei@cse.unsw.edu.au>) or Jingling Xue (jingling@cse.unsw.edu.au) if you have any questions.
