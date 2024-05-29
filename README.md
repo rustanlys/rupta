@@ -81,4 +81,4 @@ We have released the RUPTA source code with the hope that it will benefit others
 
 ## Contacts
 
-Any comments, contributions and collaborations are welcomed. Please contact the authors Wei Li (<liwei@cse.unsw.edu.au>) or Jingling Xue (jingling@cse.unsw.edu.au) if you have any questions.
+Any comments, contributions and collaborations are welcomed. Please contact the authors [Wei Li](mailto:<liwei@cse.unsw.edu.au>) or [Jingling Xue](mailto:jingling@cse.unsw.edu.au) if you have any questions.
