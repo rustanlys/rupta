@@ -2,13 +2,12 @@
 
 > :warning: [Documentation for RUPTA] is under development.
 
-This framework supports context-sensitive pointer analysis on the Rust MIR. 
-
-The associated paper titled [*A Context-Sensitive Pointer Analysis Framework for Rust and Its Application to Call Graph Construction* (CC '24)](https://dl.acm.org/doi/10.1145/3640537.3641574).
+This is an open-source framework being developed to support pointer/alias analysis for Rust, operating on ust MIR. Currently, it supports
+callsite-based pointer analysis, as described in our CC'04 paper (CC '24)](https://dl.acm.org/doi/10.1145/3640537.3641574).
 
 ## Requirements
 
-* Rust nightly and componenets, as specified in [rust-toolchain](rust-toolchain.toml).
+* Rust nightly and components, as specified in [rust-toolchain](rust-toolchain.toml).
 
 ## Build
 
