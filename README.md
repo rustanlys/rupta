@@ -3,7 +3,7 @@
 > :warning: [Documentation for RUPTA] is under development.
 
 This open-source framework, RUPTA, supports pointer/alias analysis for Rust, operating on Rust MIR. It currently offers callsite-based pointer analysis, 
-as detailed in our CC'04 paper (https://dl.acm.org/doi/10.1145/3640537.3641574). 
+as detailed in our CC'24 paper (https://dl.acm.org/doi/10.1145/3640537.3641574). 
 ## Requirements
 
 * Rust nightly and components, as specified in [rust-toolchain](rust-toolchain.toml).
@@ -13,30 +13,45 @@ as detailed in our CC'04 paper (https://dl.acm.org/doi/10.1145/3640537.3641574).
 1. Clone the repository
 
 2. Build & install
+    
+    Build RUPTA:    
 
     ```sh
-    # You can build and install RUPTA using the cargo subcommand:
-    $ cargo --locked install --path .
-
-    # Or, you can build only RUPTA itself:
     $ cargo build
     ```
+    
+    This command produces two binaries `cargo-pta` and `pta` at the directory `target/debug`. 
+    
+    You can also install RUPTA into `cargo`:
+
+    ```sh
+    $ cargo --locked install --path .
+    ```
+    
+    This allows you to run pointer analysis for a Rust project using the command `cargo pta`, similar to using other `cargo` commands like `cargo fmt`.
+    
 
 ## Usage
 
-Before using RUPTA, please ensure your Rust project compiles without errors or warnings.
+You can run RUPTA for **a Rust project** using the binary `cargo-pta`. 
 
 ```sh
-# You can run RUPTA for a rust project:
-$ cargo pta -- --entry <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-pts <pts-path>
-
-# Or, you can run RUPTA for a single file:
-$ target/debug/pta <path-to-file> --entry <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-pts <pts-path>
+$ cargo-pta pta -- --entry <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-pts <pts-path>
 ```
 
+You can use the command `cargo pta` instead of `cargo-pta pta` here if RUPTA has been installed into `cargo`.
+    
+Or, you can run RUPTA for **a single file** using the binary `pta`:
+    
+```sh
+$ pta <path-to-file> --entry <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-pts <pts-path>
+```
+
+Options:
+
 * `<entry-function-name>`: Specifies the entry function. Default is `main()`.
-* `<pta-type>`: Determines the type of pointer analysis. Options are `cs` (context-sensitive) or `ander` (andersen), with `cs` as the default.
-* `context-depth`: Sets the depth of contexts in context-sensitive analysis. Default is 1.
+* `<pta-type>`: Determines the type of pointer analysis. Options are `cs` (callsite-sensitive) or `ander` (andersen), with `cs` as the default.
+* `context-depth`: Sets the depth of contexts in callsite-sensitive analysis. Default is 1.
 * `dump-call-graph`: Outputs the call graph in DOT format.
 * `dump-pts`: Outputs the points-to analysis results.
 * `dump-mir`: Outputs the MIR for all reachable functions.
