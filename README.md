@@ -3,8 +3,7 @@
 > :warning: [Documentation for RUPTA] is under development.
 
 This open-source framework, RUPTA, supports pointer/alias analysis for Rust, operating on Rust MIR. It currently offers callsite-based pointer analysis, 
-as detailed in our CC'04 paper (https://dl.acm.org/doi/10.1145/3640537.3641574). Contributions to its further development are welcome.
-
+as detailed in our CC'04 paper (https://dl.acm.org/doi/10.1145/3640537.3641574). 
 ## Requirements
 
 * Rust nightly and components, as specified in [rust-toolchain](rust-toolchain.toml).
