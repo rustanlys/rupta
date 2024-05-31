@@ -14,34 +14,34 @@ as detailed in our CC'24 paper (https://dl.acm.org/doi/10.1145/3640537.3641574).
 
 2. Build & install
     
-    Build RUPTA:    
+    You can build RUPTA in two different ways:    
 
     ```sh
     $ cargo build
     ```
     
-    This command produces two binaries `cargo-pta` and `pta` at the directory `target/debug`. 
-    
+    This command generates two binaries, `cargo-pta` and `pta`, in the `target/debug` directory.
+
     You can also install RUPTA into `cargo`:
 
     ```sh
     $ cargo --locked install --path .
     ```
     
-    This allows you to run pointer analysis for a Rust project using the command `cargo pta`, similar to using other `cargo` commands like `cargo fmt`.
+    This enables you to perform pointer analysis on a Rust project using the command `cargo pta`, similar to other `cargo` commands such as `cargo fmt`.
     
 
 ## Usage
 
-You can run RUPTA for **a Rust project** using the binary `cargo-pta`. 
+You can run RUPTA for **a Rust project** using the binary `cargo-pta`:
 
 ```sh
 $ cargo-pta pta -- --entry <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-pts <pts-path>
 ```
 
-You can use the command `cargo pta` instead of `cargo-pta pta` here if RUPTA has been installed into `cargo`.
-    
-Or, you can run RUPTA for **a single file** using the binary `pta`:
+You can also use the command `cargo pta` instead of `cargo-pta pta` if RUPTA has been installed into `cargo`.
+
+Alternatively, you can run RUPTA for **a single file** using the binary `pta`:
     
 ```sh
 $ pta <path-to-file> --entry <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-pts <pts-path>
