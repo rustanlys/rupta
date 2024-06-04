@@ -84,38 +84,38 @@ pub struct PAGEdge {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum PAGEdgeEnum {
-    /// Statements that create a reference or a raw pointer to the place.
+    /// Statements that create a reference or a raw pointer to a place.
     AddrPAGEdge,
     /// Statements that create a value by direct assignment, including Move and Copy statements.
     DirectPAGEdge,
     /// Statements that create a value by loading the value pointed by a pointer.
-    /// e.g. _2 = (*_3), _2 = (*_3).0.1
+    /// e.g. `_2 = (*_3), _2 = (*_3).0.1`.
     LoadPAGEdge(ProjectionElems),
     /// Statements that store a value to a pointer's pointee.
-    /// e.g. (*_1) = _2, (*_1).0.1 = _2
+    /// e.g. `(*_1) = _2, (*_1).0.1 = _2`.
     StorePAGEdge(ProjectionElems),
     /// Similar to GetElementPtr instruction in llvm ir, get an element's address from
-    /// a pointed value, e.g. _2 = &((*_3).0.1)
+    /// a pointed-to object, e.g. `_2 = &((*_3).0.1)`
     GepPAGEdge(ProjectionElems),
     /// Cast a  pointer to another type
     CastPAGEdge,
-    /// Intrinsics call `offset`, Calculates the offset from a pointer.
+    /// Statements that offset a pointer.
     OffsetPAGEdge,
 }
 
 type EdgeMap = HashMap<PAGNodeId, BTreeSet<PAGEdgeId>>;
 
 pub struct PAG<P: PAGPath> {
-    /// The graph structure capturing assignment relations between nodes
+    /// The graph structure capturing assignment relations between nodes.
     pub(crate) graph: Graph<PAGNode<P>, PAGEdge>,
-    /// A map from values to node id
+    /// A map from values to node id.
     pub(crate) values: HashMap<P, PAGNodeId>,
     /// Maintains a func_pag for each function, so that in context sensitive
-    /// analysis we only need to process each function for once
+    /// analysis we only need to process each function for once.
     pub(crate) func_pags: HashMap<FuncId, FuncPAG>,
-    /// Maps each function to a set of related promoted functions
+    /// Maps each function to a set of related promoted functions.
     pub(crate) promoted_funcs_map: HashMap<FuncId, HashSet<FuncId>>,
-    /// Maps each function to a set of related static functions
+    /// Maps each function to a set of related static functions.
     pub(crate) involved_static_funcs_map: HashMap<FuncId, HashSet<FuncId>>,
     // Iterated in pointer analysis. When new function pags are constructed, we
     // put the new addr_edges into this queue to help active new constraints.
@@ -171,27 +171,27 @@ impl<P: PAGPath> PAG<P> {
         &self.graph
     }
 
-    /// Return a iterator for the address_of edges.
+    /// Return an iterator for the `address_of edges`.
     pub fn addr_edge_iter(&self) -> chunked_queue::IterCopied<PAGEdgeId> {
         self.addr_edges_queue.iter_copied()
     }
 
-    /// Returns the path for the given node_id
+    /// Returns the path for the given node_id.
     pub fn node_path(&self, node_id: PAGNodeId) -> &P {
         self.graph.node_weight(node_id).unwrap().path()
     }
 
-    /// Returns the node for the given node_id
+    /// Returns the node for the given node_id.
     pub fn get_node(&self, node_id: PAGNodeId) -> &PAGNode<P> {
         self.graph.node_weight(node_id).unwrap()
     }
 
-    /// Returns the node for the given node_id
+    /// Returns the node for the given node_id.
     pub fn get_node_mut(&mut self, node_id: PAGNodeId) -> &mut PAGNode<P> {
         self.graph.node_weight_mut(node_id).unwrap()
     }
 
-    /// Returns the node_id for the given path
+    /// Returns the node_id for the given path.
     pub fn get_node_id(&self, path: &P) -> Option<PAGNodeId> {
         match self.values.get(path) {
             Some(id) => Some(*id),
@@ -199,7 +199,7 @@ impl<P: PAGPath> PAG<P> {
         }
     }
 
-    /// Returns the edge for the given edge_id
+    /// Returns the edge for the given edge_id.
     pub fn get_edge(&self, edge_id: PAGEdgeId) -> &PAGEdge {
         self.graph.edge_weight(edge_id).unwrap()
     }
@@ -226,7 +226,7 @@ impl<P: PAGPath> PAG<P> {
         }
     }
 
-    /// Returns true if the edge from src path to dst path of the `kind` exits.
+    /// Returns true if the edge from `src` to `dst` of the `kind` exists.
     pub fn has_edge(&self, src: &P, dst: &P, kind: &PAGEdgeEnum) -> bool {
         match (self.values.get(src), self.values.get(dst)) {
             (Some(src_id), Some(dst_id)) => self.contains_edge(*src_id, *dst_id, kind),
@@ -234,7 +234,7 @@ impl<P: PAGPath> PAG<P> {
         }
     }
 
-    /// Returns true if the edge from src to dst of the `kind` exits.
+    /// Returns true if the edge from `src` to `dst` of the `kind` exists.
     pub fn contains_edge(&self, src: PAGNodeId, dst: PAGNodeId, kind: &PAGEdgeEnum) -> bool {
         for edge in self.graph.edges_connecting(src, dst) {
             if &edge.weight().kind == kind {
@@ -301,8 +301,8 @@ impl<P: PAGPath> PAG<P> {
         self.offset_out_edges.entry(node_id).or_default().insert(out_edge);
     }
 
-    /// Adds an edge from src to dst according to the edge type. 
-    /// Returns the edge id if this edge is newly added to the graph
+    /// Adds an edge from `src` to `dst` according to the edge type. 
+    /// Returns the edge id if this edge is newly added to the graph.
     pub fn add_edge(&mut self, src: &P, dst: &P, kind: PAGEdgeEnum) -> Option<PAGEdgeId> {
         match kind {
             PAGEdgeEnum::AddrPAGEdge => self.add_addr_edge(src, dst),
@@ -428,7 +428,7 @@ impl<P: PAGPath> PAG<P> {
         None
     }
 
-    /// Given two paths, add direct edge between them if they are of pointer type or add direct
+    /// Given two paths, add direct edge between them if they are both of pointer type or add direct
     /// edges between their pointer type fields if any. Return the edges added.
     pub fn add_new_direct_edges<'tcx>(
         &mut self,
@@ -484,13 +484,13 @@ impl<P: PAGPath> PAG<P> {
             self.promoted_funcs_map.insert(func_id, promoted_funcs);
         }
 
-        // Build pag for this function
+        // Build pag for this function.
         let mut fpag = FuncPAG::new(func_id);
         let mir = acx.tcx.optimized_mir(def_id);
         let mut builder = fpag_builder::FuncPAGBuilder::new(acx, func_id, mir, &mut fpag);
         builder.build();
 
-        // Build function pags for static variables encountered in this function
+        // Build function pags for static variables encountered in this function.
         let mut static_funcs = HashSet::new();
         for static_variable in &fpag.static_variables_involved {
             if let PathEnum::StaticVariable { def_id } = static_variable.value {

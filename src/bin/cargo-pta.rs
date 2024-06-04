@@ -3,6 +3,13 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! This provides an implementation for the "cargo pta" subcommand.
+//! 
+//! The subcommand is the same as "cargo check" but with three differences:
+//! 1) It implicitly adds the options "-Z always_encode_mir" to the rustc invocation.
+//! 2) It calls `pta` rather than `rustc` for all the targets of the current package.
+//! 3) It runs `cargo test --no-run` for test targets.
+
 use cargo_metadata::Package;
 use log::info;
 use rustc_tools_util::VersionInfo;
@@ -15,10 +22,14 @@ use std::process::{Command, Stdio};
 
 use rupta::util;
 
+/// The help message for `cargo-pta`
 const CARGO_PTA_HELP: &str = r#"Pointer analysis tool for Rust programs
 Usage:
     cargo pta
 "#;
+
+/// Set the environment variable `PTA_BUILD_STD` to enable the building of std library when running pta.
+const PTA_BUILD_STD: &str = "PTA_BUILD_STD";
 
 pub fn main() {
     if std::env::args().take_while(|a| a != "--").any(|a| a == "--help" || a == "-h") {
@@ -126,17 +137,12 @@ fn call_cargo_on_target(target: &String, kind: &str) {
         if arg == "--" {
             break;
         }
-        if arg == "--no-std-build" {
-            continue;
-        }
         cmd.arg(arg);
     }
 
     // Enable Cargo to compile the standard library from source code as part of a crate graph compilation.
-    if !has_arg_flag("-Zbuild-std") && !has_arg_flag("build-std") {
-        if !has_arg_flag("--no-std-build") {
-            cmd.arg("-Zbuild-std");
-        }
+    if env::var(PTA_BUILD_STD).is_ok() {
+        cmd.arg("-Zbuild-std");
 
         if !has_arg_flag("--target") {
             let toolchain_target = toolchain_target().expect("could not get toolchain target");
@@ -244,15 +250,15 @@ fn call_rustc() {
     }
 }
 
-// Determines whether a flag `name` is present before `--`.
-// For example, has_arg_flag("-v")
+/// Determines whether a flag `name` is present before `--`.
+/// For example, has_arg_flag("-v")
 fn has_arg_flag(name: &str) -> bool {
     let mut args = std::env::args().take_while(|val| val != "--");
     args.any(|val| val == name)
 }
 
-// Gets the value of a `name`.
-// `--name value` or `--name=value`
+/// Gets the value of `name`.
+/// `--name value` or `--name=value`
 fn get_arg_flag_value(name: &str) -> Option<String> {
     let mut args = std::env::args().take_while(|val| val != "--");
     loop {
@@ -274,7 +280,7 @@ fn get_arg_flag_value(name: &str) -> Option<String> {
     }
 }
 
-// Returns the target of the toolchain, e.g. "x86_64-unknown-linux-gnu".
+/// Returns the target of the toolchain, e.g. "x86_64-unknown-linux-gnu".
 fn toolchain_target() -> Option<String> {
     let sysroot = util::find_sysroot();
 

@@ -42,12 +42,6 @@ impl<T: Idx> fmt::Debug for HybridPointsToSet<T> {
     }
 }
 
-// impl<T: Idx> HybridPointsToSet<T> {
-//     pub fn iter(&self) -> HybridIter<'_, T> {
-//         self.points_to.iter()
-//     }
-// }
-
 /// IntoIterator
 impl<'a, T: Idx> IntoIterator for &'a HybridPointsToSet<T> {
     type Item = T;

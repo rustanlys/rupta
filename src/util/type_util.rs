@@ -67,7 +67,7 @@ impl<'tcx> TypeCache<'tcx> {
 }
 
 
-/// Provides a way to effectively get the pointer type fields of a given type
+/// Provides a way to effectively get the pointer type fields of a given type.
 pub struct PointerProjectionsCache<'tcx> {
     pub(crate) ptr_projs_cache: HashMap<Ty<'tcx>, Vec<(ProjectionElems, Ty<'tcx>)>>,
 }

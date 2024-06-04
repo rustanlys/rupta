@@ -25,6 +25,9 @@ const PTR_METADATA_OFFSET: usize = 8;
 /// A non-empty list of projections
 pub type ProjectionElems = Vec<PathSelector>;
 
+/// The customized representation for a local variable, heap objects, ...
+/// 
+/// Resembles the `Place` type in rustc.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Path {
     pub value: PathEnum,
@@ -36,6 +39,7 @@ impl Debug for Path {
     }
 }
 
+/// A path augmented with a context.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CSPath {
     pub cid: ContextId,
@@ -50,6 +54,7 @@ impl CSPath {
     }
 }
 
+/// Different kinds of `Path` used in our analysis.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum PathEnum {
     /// Locals [arg_count+1..] are the local variables and compiler temporaries.
@@ -280,7 +285,7 @@ impl Path {
         }
     }
 
-    /// Creates a new auxiliary path
+    /// Creates a new auxiliary path.
     pub fn new_aux(func_id: FuncId, ordinal: usize) -> Rc<Path> {
         Rc::new(Path {
             value: PathEnum::Auxiliary { func_id, ordinal },
@@ -363,7 +368,7 @@ impl Path {
         Self::append_projection_elem(&base, PathSelector::UnionField(field_index))
     }
     
-    /// Creates a path that selects the given downcast of the enum at the given path
+    /// Creates a path that selects the given downcast of the enum at the given path.
     pub fn new_downcast(base: Rc<Path>, downcast_variant: usize) -> Rc<Path> {
         Self::append_projection_elem(&base, PathSelector::Downcast(downcast_variant))
     }
@@ -398,7 +403,7 @@ impl Path {
         Path::add_offset(dyn_ptr_path, PTR_METADATA_OFFSET)
     }
 
-    /// Creates a path by appending the projection elem
+    /// Creates a path by appending the projection elem.
     pub fn append_projection_elem(path: &Rc<Path>, projection_elem: PathSelector) -> Rc<Path> {
         match &path.value {
             PathEnum::QualifiedPath { base, projection } => {
@@ -462,7 +467,7 @@ impl Path {
         }
     }
 
-    /// Returns the original path by removing the cast
+    /// Returns the original path by removing the cast.
     pub fn remove_cast(path: &Rc<Path>) -> Rc<Path> {
         if let PathEnum::QualifiedPath { base: _, projection } = &path.value {
             if let PathSelector::Cast(_) = projection.last().unwrap() {
@@ -480,8 +485,7 @@ impl Path {
     } 
 }
 
-/// cannot define inherent `impl` for a type outside of the crate where the type is defined
-/// define and implement a trait or new type instead
+
 pub trait PathSupport {
     fn is_field_of(&self, path: &Rc<Path>) -> bool;
     fn is_deref_path(&self) -> bool;

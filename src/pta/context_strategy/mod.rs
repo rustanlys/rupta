@@ -3,6 +3,11 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! Context strategies for context-sensitive pointer analyses, 
+//! such as k-callsite-sensitive, k-object-sensitive, ...
+//! 
+//! Only k-callsite-sensitive pointer analyses have been thoroughly evaluated so far.
+
 use std::rc::Rc;
 
 use crate::mir::call_site::{BaseCallSite, CSCallSite};

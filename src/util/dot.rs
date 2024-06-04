@@ -1,11 +1,11 @@
 //! Simple graphviz dot file format output.
-//! Adapted from dot.rs in petgraph.
+//! Adapted from `dot.rs` in `petgraph`.
 
 use std::fmt::{self, Display, Write};
 
 use petgraph::visit::{EdgeRef, GraphProp, IntoEdgeReferences, IntoNodeReferences, NodeIndexable, NodeRef};
 
-/// `Dot` implements output to graphviz .dot format for a graph.
+/// `Dot` implements output to graphviz `.dot` format for a graph.
 ///
 /// Formatting and options are rather simple, this is mostly intended
 /// for debugging. Exact output may change.

@@ -3,6 +3,8 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! Analysis options.
+
 use itertools::Itertools;
 
 use clap::{Arg, Command};
@@ -14,7 +16,7 @@ use crate::pta::PTAType;
 
 const RUPTA_USAGE: &str = r#"pta [OPTIONS] INPUT -- [RUSTC OPTIONS]"#;
 
-/// version information from Cargo.toml
+/// The version information from Cargo.toml.
 fn version() -> &'static str {
     let version_info = rustc_tools_util::get_version_info!();
     let version = format!("v{}.{}.{}", version_info.major, version_info.minor, version_info.patch);

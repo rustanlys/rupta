@@ -11,18 +11,17 @@ use std::marker::PhantomData;
 use super::points_to::PointsToSet;
 use crate::util::bit_vec::Idx;
 
-/// Basic points-to data structure
-/// Given a key (variable/condition variable), return its points-to data (pts/condition pts)
-/// It is designed flexible for different context, heap and path sensitive analysis
-/// Context Insensitive			   Key --> Variable, DataSet --> PointsTo
-/// Context sensitive:  			   Key --> CondVar,  DataSet --> PointsTo
-/// Heap sensitive:     			   Key --> Variable  DataSet --> CondPointsToSet
-/// Context and heap sensitive:     Key --> CondVar,  DataSet --> CondPointsToSet
+/// Basic points-to data structure.
+/// 
+/// Given a key (variable/condition variable), return its points-to data (pts/context-sensitve pts).
+/// It is designed flexible for different context, heap and path sensitive analysis.
+///  1. Context Insensitive:	Key --> Pointer, DataSet --> PointsTo
+///  2. Context sensitive:  	Key --> CSPointer,  DataSet --> CSPointsTo
 ///
-/// K  (Key):     "owning" variable of a points-to set.
-/// KS (KeySet):  collection of keys.
-/// D  (Data):    elements in points-to sets.
-/// DS (DataSet): the points-to set; a collection of Data.
+/// * K  (Key):     "owning" variable of a points-to set.
+/// * KS (KeySet):  collection of keys.
+/// * D  (Data):    elements in points-to sets.
+/// * DS (DataSet): the points-to set; a collection of Data.
 pub struct BasePTData<K, KS, D, DS> {
     pts_map: HashMap<K, DS>,
     rev_pts_map: HashMap<D, KS>,
@@ -140,6 +139,7 @@ where
 }
 
 /// Diff points-to data.
+/// 
 /// This is an optimisation on top of the base points-to data structure.
 /// The points-to information is propagated incrementally only for the different parts.
 pub struct DiffPTData<K, D, DS> {

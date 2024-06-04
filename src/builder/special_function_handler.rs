@@ -3,6 +3,8 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! Provides special handling for a set of functions.
+
 use lazy_static::lazy_static;
 use log::*;
 use std::collections::HashSet;
@@ -78,13 +80,16 @@ lazy_static! {
     };
 }
 
+/// Returns true if the function with `def_id` is specially handled.
 pub fn is_specially_handled_function(acx: &mut AnalysisContext, def_id: DefId) -> bool {
     let known_name = acx.get_known_name_for(def_id);
     SPECIALLY_HANDLED_FUNCTIONS.contains(&known_name)
 }
 
-
-// Returns true if this callee function is handled as a special function.
+/// Handling calls to special functions.
+/// 
+/// Returns true if this callee function is handled as a special function.
+/// If the return result is false, we need to continue with the normal logic.
 pub fn handled_as_special_function_call<'tcx>(
     fpb: &mut FuncPAGBuilder<'_, 'tcx, '_>,
     callee_def_id: &DefId,
@@ -157,7 +162,6 @@ pub fn handled_as_special_function_call<'tcx>(
             let tcx = fpb.acx.tcx;
             let generic_types = gen_args.into_type_list(tcx);
             assert!(generic_types.len() >= 2);
-            // format!("{:?}", gen_args) == "[std::ptr::Unique<u8>, std::ptr::NonNull<u8>]"  
             if is_std_ptr_unique(tcx, generic_types[0]) && is_std_ptr_nonnull(tcx, generic_types[1]) {
                 handle_unique_into_nonnull(fpb, args, destination);
                 return true;
@@ -171,13 +175,13 @@ pub fn handled_as_special_function_call<'tcx>(
 }
 
 
+/// Handles the call to the intrinsics `Transmute` function.
 fn handle_transmute<'tcx>(
     fpb: &mut FuncPAGBuilder<'_, 'tcx, '_>,
     gen_args: &GenericArgsRef<'tcx>,
     args: &Vec<Rc<Path>>,
     destination: &Rc<Path>,
 ) {
-    debug!("Transmuting from {:?} to {:?}", args[0], destination);
     let source_path = args[0].clone();
     let source_rustc_type = gen_args.get(0).expect("rustc type error").expect_ty();
     let target_path = destination.clone();
@@ -189,9 +193,9 @@ fn handle_transmute<'tcx>(
 }
 
 
-/// `std::ptr::mut_ptr::offset(_1: *mut T, _2: isize)`
-/// Returns the address computed from the based address and the offset.
-/// Commonly used when vector read write operations.
+/// Handles the call to the `offset` function, such as `std::ptr::mut_ptr::offset(_1: *mut T, _2: isize)`.
+/// The offset function returns the address computed from the based address and the offset, and is commonly 
+/// used in vector's read/write operations.
 fn handle_offset<'tcx>(
     fpb: &mut FuncPAGBuilder<'_, 'tcx, '_>,
     args: &Vec<Rc<Path>>,
@@ -202,10 +206,10 @@ fn handle_offset<'tcx>(
     fpb.add_offset_edge(source_path, destination.clone());
 }
 
-/// `core::ptr::const_ptr::cast()` and `core::ptr::mut_ptr::cast()`
-/// Casts to a pointer of another type.
+/// `core::ptr::const_ptr::cast()` and `core::ptr::mut_ptr::cast()`.
+/// 
 /// The cast functions significantly impacts the analysis precision and efficiency 
-/// when analyzed context insensitively 
+/// when analyzed context-insensitively.
 fn handle_ptr_cast<'tcx>(
     fpb: &mut FuncPAGBuilder<'_, 'tcx, '_>,
     args: &Vec<Rc<Path>>,
@@ -217,8 +221,8 @@ fn handle_ptr_cast<'tcx>(
 }
 
 
-/// `fn allocate_in(capacity: usize, init: AllocInit, alloc: A) -> Self`
-/// RawVec<T, A: Allocator = Global> { ptr: Unique<T>, cap: usize, alloc: A, }
+/// ```fn allocate_in(capacity: usize, init: AllocInit, alloc: A) -> Self```.
+/// ```RawVec<T, A: Allocator = Global> { ptr: Unique<T>, cap: usize, alloc: A, }```
 fn handle_raw_vec_allocate_in<'tcx>(
     fpb: &mut FuncPAGBuilder<'_, 'tcx, '_>,
     gen_args: &GenericArgsRef<'tcx>,
@@ -264,7 +268,7 @@ fn handle_raw_vec_allocate_in<'tcx>(
 }
 
 
-/// fn spawn_unchecked<'a, F, T>(self, f: F) -> io::Result<JoinHandle<T>>
+/// ```fn spawn_unchecked<'a, F, T>(self, f: F) -> io::Result<JoinHandle<T>>```.
 /// This function starts a new thread by calling external C function.
 /// Instead of calling this function, we indirect the call to the thread closure f.
 /// We can call `inline_indirectly_called_function` in fpb directly to resolve this call.
@@ -292,7 +296,7 @@ fn handle_thread_builder_spawn_unchecked<'tcx>(
         new_location,
     );
 
-    // Todo: Add edges from aux_dst to destination, to do so, we need to allocate a heap memory for the packet field.
+    // Todo: Add edges from `aux_dst` to `destination`, to do so, we need to allocate a heap memory for the packet field.
     // Destination type: io::Result<JoinHandle<T>>, where struct JoinHandle<T>(JoinInner<'static, T>);
     // struct JoinInner<'scope, T> {
     //     native: imp::Thread,
@@ -319,7 +323,7 @@ fn handle_non_null_as_ptr<'tcx>(
     fpb.add_direct_edge(field_path, destination.clone());
 }
 
-/// fn std::ptr::Unique::<T>::new_unchecked(_1: *mut T) -> std::ptr::Unique<T>
+/// ```fn std::ptr::Unique::<T>::new_unchecked(_1: *mut T) -> std::ptr::Unique<T>```
 fn handle_unique_new_unchecked<'tcx>(
     fpb: &mut FuncPAGBuilder<'_, 'tcx, '_>,
     args: &Vec<Rc<Path>>,
@@ -333,13 +337,10 @@ fn handle_unique_new_unchecked<'tcx>(
     fpb.add_direct_edge(args[0].clone(), dst_field_path);
 }
 
-/// fn std::result::Result::<T, E>::map_err(_1: std::result::Result<T, E>, _2: O) -> std::result::Result<T, F>
-/// enum Result<T, E> {
-///    Ok(T),
-///    Err(E),
-/// }
-/// path.as_variant#0.0: T
-/// Handling as assignment from `param_1.as_variant#0.0` to `ret.as_variant#0.0` 
+/// ```fn std::result::Result::<T, E>::map_err(_1: std::result::Result<T, E>, _2: O) 
+///    -> std::result::Result<T, F>
+/// ```
+/// Handles as an assignment from `param_1.as_variant#0.0` to `ret.as_variant#0.0`.
 fn handle_result_map_err<'tcx>(
     fpb: &mut FuncPAGBuilder<'_, 'tcx, '_>,
     gen_args: &GenericArgsRef<'tcx>,
@@ -477,7 +478,7 @@ fn handle_alloc<'tcx>(
             fpb.add_direct_edge(args[0].clone(), destination.clone());
             true
         }
-        // Reallocates memory on the heap and returns a result of Result<NonNull<[u8]>, AllocError> type.
+        // Reallocates memory on the heap and returns a result of `Result<NonNull<[u8]>, AllocError>` type.
         KnownNames::StdAllocAllocatorGrow
         | KnownNames::StdAllocAllocatorGrowZeroed
         | KnownNames::StdAllocAllocatorShrink => {

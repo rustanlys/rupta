@@ -29,6 +29,7 @@ use crate::util::pta_statistics::ContextSensitiveStat;
 use crate::util::{self, chunked_queue, results_dumper};
 
 pub type CallSiteSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'pta, 'tcx, 'compilation, KCallSiteSensitive>;
+/// The object-sensitive pointer analysis for Rust has not been throughly evaluated so far.
 pub type ObjectSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'pta, 'tcx, 'compilation, KObjectSensitive>;
 
 pub struct ContextSensitivePTA<'pta, 'tcx, 'compilation, S: ContextStrategy> {
@@ -106,7 +107,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         self.ctx_strategy.get_empty_context_id()
     }
 
-    /// Initialize analysis
+    /// Initialize the analysis.
     pub fn initialize(&mut self) {
         // add the entry point to the call graph
         let entry_point = self.acx.entry_point;
@@ -118,7 +119,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         self.process_reach_funcs();
     }
 
-    /// Solve the worklist problem by using Propagator
+    /// Solve the worklist problem using Propagator.
     pub fn propagate(&mut self) {
         let mut iter_proc_edge_iter = self.inter_proc_edges_queue.iter_copied();
         // Solve until no new call relationship is found.
@@ -147,7 +148,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     }
 
     
-    /// Process statements of reachable functions.
+    /// Process statements in reachable functions.
     fn process_reach_funcs(&mut self) {
         while let Some(func) = self.rf_iter.next() {
             if !self.processed_funcs.contains(&func) {
@@ -166,7 +167,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         }
     }
 
-    /// Adds internal edges of a function pag to pag.
+    /// Adds internal edges of a function pag to the whole program's pag.
     /// The function pag for the given def_id should be built before calling this function.
     pub fn add_fpag_edges(&mut self, func: CSFuncId) {
         if self.processed_funcs.contains(&func) {
@@ -360,13 +361,12 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         ))
     }
 
-    // Get points-to data
     #[inline]
     pub fn get_pt_data(&self) -> &DiffPTDataTy {
         &self.pt_data
     }
 
-    /// Finalize analysis
+    /// Finalize the analysis.
     pub fn finalize(&self) {
         // dump call graph, points-to results
         results_dumper::dump_results(self.acx, &self.call_graph, &self.pt_data, &self.pag);

@@ -25,13 +25,13 @@ pub mod results_dumper;
 pub mod type_util;
 pub mod unsafe_statistics;
 
-/// Copied from Mirai
+
 /// Returns the location of the rust system binaries that are associated with this build of rust-pta.
 /// The location is obtained by looking at the contents of the environmental variables that were
 /// set at the time rust-pta was compiled. If the rust compiler was installed by rustup, the variables
-/// RUSTUP_HOME and RUSTUP_TOOLCHAIN are used and these are set by the compiler itself.
+/// `RUSTUP_HOME` and `RUSTUP_TOOLCHAIN` are used and these are set by the compiler itself.
 /// If the rust compiler was compiled and installed in some other way, for example from a source
-/// enlistment, then the RUST_SYSROOT variable must be set in the environment from which rust-pta
+/// enlistment, then the `RUST_SYSROOT` variable must be set in the environment from which rust-pta
 /// is compiled.
 pub fn find_sysroot() -> String {
     let home = option_env!("RUSTUP_HOME");
@@ -63,7 +63,7 @@ pub fn pretty_print_mir(tcx: TyCtxt<'_>, def_id: DefId) {
     }
 }
 
-/// Returns true if the function identified by def_id is defined as part of a trait.
+/// Returns true if the function identified by `def_id` is defined as part of a trait.
 #[inline]
 pub fn is_trait_method(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
     if tcx.trait_of_item(def_id).is_some() {
@@ -73,7 +73,7 @@ pub fn is_trait_method(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
     }
 }
 
-/// Returns true if the function identified by def_id is defined in the Rust Standard Library.
+/// Returns true if the function identified by `def_id` is defined in the Rust Standard Library.
 pub fn is_std_lib_func(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
     let crate_name = tcx.crate_name(def_id.krate);
     match crate_name.as_str() {
@@ -82,8 +82,8 @@ pub fn is_std_lib_func(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
     }
 }
 
-/// Returns true if the function has an explicit self (either self or &(mut) self) as its first 
-/// parameter, allowing method calls
+/// Returns true if the function has an explicit `self` (either `self` or `&(mut) self`) as its first 
+/// parameter, allowing method calls.
 #[inline]
 pub fn has_self_parameter(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
     if !tcx.is_mir_available(def_id) {
@@ -96,7 +96,7 @@ pub fn has_self_parameter(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
     }
 }
 
-/// Returns true if the function has an explicit &(mut) self as its first parameter, allowing method calls
+/// Returns true if the function has an explicit `&(mut) self` as its first parameter, allowing method calls.
 pub fn has_self_ref_parameter(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
     if has_self_parameter(tcx, def_id) {
         let mir = tcx.optimized_mir(def_id);
@@ -110,7 +110,7 @@ pub fn has_self_ref_parameter(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
     }
 }
 
-
+/// Returns true if the call to (`callee_def_id`, `callee_substs`) is a dynamic call.
 #[inline]
 pub fn is_dynamic_call<'tcx>(
     tcx: TyCtxt<'tcx>,
@@ -150,7 +150,7 @@ pub fn customize_generic_args<'tcx>(tcx: TyCtxt<'tcx>, generic_args: GenericArgs
         .collect()
 }
 
-/// Returns an offset_path equivalent to the qualified_path
+/// Returns an `offset_path` equivalent to the `qualified_path`.
 pub fn qualified_path_to_offset_path(acx: &mut AnalysisContext, path: Rc<Path>) -> Rc<Path> {
     if let PathEnum::QualifiedPath { base, projection } = &path.value {
         let base_ty = acx.get_path_rustc_type(base).unwrap();

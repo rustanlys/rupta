@@ -16,9 +16,11 @@ use crate::mir::function::{FuncId, CSFuncId};
 use crate::util::chunked_queue::{self, ChunkedQueue};
 use crate::util::dot::Dot;
 
-// Unique identifiers for graph node and edges.
+/// Unique identifiers for call graph nodes.
 pub type CGNodeId = NodeIndex<DefaultIx>;
+/// Unique identifiers for call graph edges.
 pub type CGEdgeId = EdgeIndex<DefaultIx>;
+// Context-sensitive call graph.
 pub type CSCallGraph = CallGraph<CSFuncId, CSBaseCallSite>;
 
 
@@ -83,14 +85,15 @@ impl<S: CGCallSite> CallGraphEdge<S> {
 }
 
 pub struct CallGraph<F: CGFunction, S: CGCallSite> {
-    /// The graph structure capturing calls between nodes
+    /// The graph structure capturing call relationships.
     pub graph: Graph<CallGraphNode<F>, CallGraphEdge<S>>,
-    /// A map from function value to call graph node id
+    /// A map from functions to their corresponding call graph nodes.
     pub func_nodes: HashMap<F, CGNodeId>,
-    /// A map from call sites to call graph edges
+    /// A map from call sites to call graph edges.
     pub callsite_to_edges: HashMap<S, HashSet<CGEdgeId>>,
+    /// Record the type of each call.
     pub(crate) callsite_to_type: HashMap<BaseCallSite, CallType>,
-    /// A queue of reachable ndoes
+    /// A queue of reachable ndoes.
     pub(crate) reach_funcs: ChunkedQueue<F>,
 }
 
@@ -151,7 +154,7 @@ impl<F: CGFunction, S: CGCallSite> CallGraph<F, S> {
         self.graph.edge_endpoints(edge_id)
     }
 
-    /// Get the callees set for a callsite
+    /// Get the set of callees for a callsite.
     pub fn get_callees(&self, callsite: &S) -> HashSet<F> {
         if let Some(edges) = self.callsite_to_edges.get(callsite) {
             edges
@@ -166,7 +169,7 @@ impl<F: CGFunction, S: CGCallSite> CallGraph<F, S> {
         }
     }
 
-    /// Returns false if the edge from callsite to callee already existed, and true otherwise.
+    /// Returns true if an edge to the callee already existed for the callsite.
     pub fn has_edge(&self, callsite: &S, callee_id: F) -> bool {
         let callees = self.get_callees(callsite);
         callees.contains(&callee_id)

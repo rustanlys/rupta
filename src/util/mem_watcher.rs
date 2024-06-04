@@ -3,6 +3,8 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! Memory usage monitoring. Currently only supported on Linux.
+
 use std::sync::{Mutex, Arc};
 use std::thread::{JoinHandle, self};
 use std::{fs::File, io::Read};
@@ -16,9 +18,7 @@ use nom::IResult;
 use nom::bytes::streaming::tag;
 use nom::multi::count;
 
-/// Process memory usage information from `/proc/[pid]/statm`.
-
-/// Process memory usage information.
+/// Memory usage information prcessed from `/proc/[pid]/statm`.
 ///
 /// All values are in units of pages.
 ///

@@ -26,45 +26,45 @@ use crate::mir::path::{PathEnum, ProjectionElems};
 
 /// Global information of the analysis
 pub struct AnalysisContext<'tcx, 'compilation> {
-    /// The central data structure of the compiler
+    /// The central data structure of the compiler.
     pub tcx: TyCtxt<'tcx>,
 
-    /// Represents the data associated with a compilation session for a single crate
+    /// Represents the data associated with a compilation session for a single crate.
     pub session: &'compilation Session,
 
-    /// The entry function of the analysis
+    /// The entry function of the analysis.
     pub entry_point: DefId,
 
-    /// Options of the analysis
+    /// Options of the analysis.
     pub analysis_options: AnalysisOptions,
 
     pub functions: IndexVec<FuncId, Rc<FunctionReference<'tcx>>>,
     pub func_id_map: HashMap<Rc<FunctionReference<'tcx>>, FuncId>,
     pub func_name_cache: HashMap<FuncId, Box<str>>, 
 
-    /// Provides a way to refer to a  rustc_middle::ty::Ty via a handle that does not have
-    /// a life time specifier
+    /// Provides a way to refer to a  `rustc_middle::ty::Ty` via a handle that does not have
+    /// a life time specifier.
     pub type_cache: TypeCache<'tcx>,
 
-    /// Record the original type for each object
+    /// Record the original type for each object.
     pub path_ty_cache: HashMap<Rc<Path>, Ty<'tcx>>,
     /// Record the memory size for each stack and heap object.
     pub path_memory_size: HashMap<Rc<Path>, usize>,
 
-    /// Manage the cast types for each object
+    /// Manage the cast types for each object.
     pub path_cast_cache: PathCastCache<'tcx>,
 
-    /// Cache all the pointer type fields' projections for each type
+    /// Cache all the pointer type fields' projections for each type.
     pub ptr_projs_cache: PointerProjectionsCache<'tcx>,
-    /// Cache the byte offset for each field of type
+    /// Cache the byte offset for each field of type.
     pub field_byte_offset_cache: FieldByteOffsetCache<'tcx>,
 
     pub dyn_callsite_cache: HashMap<BaseCallSite, CalleeIdentifier<'tcx>>,
 
-    /// Functions specially handled in special_function_handler
+    /// Functions specially handled in special_function_handler.
     pub special_functions: HashSet<FuncId>,
 
-    /// Heap objects that have been cast to a concretized type
+    /// Heap objects that have been cast to a concretized type.
     pub concretized_heap_objs: HashMap<Rc<Path>, Ty<'tcx>>,
 
     /// Record the max index of the auxiliary local variable for each function instance.
@@ -139,7 +139,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         }
     }
 
-    /// Updates the type cache so that looking up the type of path returns ty.
+    /// Records the type of `path`.
     pub fn set_path_rustc_type(&mut self, path: Rc<Path>, ty: Ty<'tcx>) {
         let erase_regions_ty = self.tcx.erase_regions_ty(ty);
         if let Some(t) = self.path_ty_cache.get(&path) {
@@ -147,7 +147,6 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
                 return;
             } else if !ty.is_impl_trait() {
                 // An impl trait type maybe updated to a concrete type later
-                // warn!("Different types set to path {:?}: {:?}, {:?}", path, *t, ty);
             }
         }
         self.path_ty_cache.insert(path, erase_regions_ty);
@@ -160,7 +159,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         None
     }
 
-    /// Caches the size of the path
+    /// Records the size of `path``.
     pub fn set_path_memory_size(&mut self, path: Rc<Path>, ty: Ty<'tcx>) {
         let max_size = 10000;
         match path.value {
@@ -194,7 +193,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         self.type_cache.get_type(index)
     }
 
-    /// Creates a path that casts the given path to a given type
+    /// Creates a path cast from the given path.
     pub fn cast_to(&mut self, path: &Rc<Path>, ty: Ty<'tcx>) -> Option<Rc<Path>> {
         let mut path_cast_cache = std::mem::take(&mut self.path_cast_cache);
         let res = path_cast_cache.cast_to(self, path, ty);
@@ -205,7 +204,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         res
     }
 
-    /// Returns the type variant of the given path, returns none if the path has not been cast to ty
+    /// Returns the type variant of the given path, returns `None` if the path has not been cast to `ty`.
     pub fn get_type_variant(&mut self, path: &Rc<Path>, ty: Ty<'tcx>) -> Option<Rc<Path>> {
         let mut path_cast_cache = std::mem::take(&mut self.path_cast_cache);
         let res = path_cast_cache.get_type_variant(self, path, ty);
@@ -217,12 +216,12 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
     }
 
     /// Different paths may refer to the same memory location, we can regularize these path to a base path
-    /// e.g. a.0.0, a.0, a.cast#T' and a are all represented by one path
+    /// e.g. `a.0.0`, `a.0`, `a.cast#T'` and `a` will all be represented by one path.
     pub fn get_regularized_path(&mut self, path: Rc<Path>) -> Rc<Path> {
         PathCastCache::get_regularized_path(self, path)
     }
 
-    /// Returns the types that a path may be cast to
+    /// Returns the types that a path have been cast to.
     pub fn get_cast_types(&self, path: &Rc<Path>) -> Option<&HashSet<Ty<'tcx>>> {
         self.path_cast_cache.get_cast_types(path)
     }
@@ -232,7 +231,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         self.ptr_projs_cache.get_pointer_projections(self.tcx, ty)
     }
 
-    /// Get the byte offset of a specific field 
+    /// Get the byte offset of a specific field.
     pub fn get_field_byte_offset(&mut self, base_ty: Ty<'tcx>, proj: &ProjectionElems) -> usize {
         self.field_byte_offset_cache
             .get_field_byte_offset(self.tcx, base_ty, proj)
@@ -307,17 +306,11 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         self.known_names_cache.get(self.tcx, def_id)
     }
 
-    /// Creates an auxiliary local variable with the given type for the given func_id.
+    /// Creates an auxiliary local variable with the given type for the given `func_id`.
     /// Returns the path of the auxiliary local variable.
     ///
-    /// Auxiliary local variables are introduced for handling special statements.
-    /// For example, given a ReifyFnPointer Cast statement which casts a function item
-    /// of FnDef type to a function pointer, we add an addr_of edge from the right-hand-side
-    /// path to the left-hand-side path. However, the left place of this statement can be a
-    /// dereference, e.g. `(*_2) = times2 as fn(i32) -> i32 (Pointer(ReifyFnPointer));`
-    /// For this case, we create an auxiliary local variable `aux` to split this statement
-    /// into two statements: `aux = times2 as fn(i32) -> i32 (Pointer(ReifyFnPointer));` and
-    /// `(*2) = aux`.
+    /// Auxiliary local variables are introduced for breaking donw complex statements into
+    /// simple assignments.
     pub fn create_aux_local(&mut self, func_id: FuncId, ty: Ty<'tcx>) -> Rc<Path> {
         let aux_local_index = *self.aux_local_indexer.get(&func_id).expect("aux_local_index");
         debug!(

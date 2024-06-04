@@ -3,6 +3,10 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! Builds the Pointer Assignment Graph (PAG) for a single function.
+//! 
+//! The Function PAG is part of the PAG for the whole program.
+
 use log::*;
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -31,6 +35,8 @@ use crate::util::{self, type_util};
 
 use super::substs_specializer::SubstsSpecializer;
 
+/// A visitor that traverses the MIR associated with a particular function's body and
+/// build the function's pointer assignment graph.
 pub struct FuncPAGBuilder<'pta, 'tcx, 'compilation> {
     pub(crate) acx: &'pta mut AnalysisContext<'tcx, 'compilation>,
     pub(crate) func_id: FuncId,
@@ -52,8 +58,7 @@ impl<'pta, 'tcx, 'compilation> Debug for FuncPAGBuilder<'pta, 'tcx, 'compilation
     }
 }
 
-/// A visitor that traverses the MIR associated with a particular function's body and
-/// build the corresponding function pag.
+
 impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
     pub fn new(
         acx: &'pta mut AnalysisContext<'tcx, 'compilation>,
@@ -93,24 +98,28 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         self.func_ref.def_id
     }
 
-    /// If this function corresponds to a promoted constant
+    /// Returns true if this function corresponds to an initialization procedure 
+    /// for a promoted constant.
     #[inline]
     fn is_promoted(&self) -> bool {
         self.func_ref.promoted.is_some()
     }
 
-    /// If this function corresponds to an initialization procedure for a static item 
+    /// Returns true if this function corresponds to an initialization procedure 
+    /// for a static item.
     #[inline]
     fn is_static(&self) -> bool {
         self.acx.tcx.is_static(self.def_id())
     }
 
-    /// If this function corresponds to an initialization procedure for a const item 
+    /// Returns true if this function corresponds to an initialization procedure 
+    /// for a const item.
     #[inline]
     fn is_const(&self) -> bool {
         matches!(self.tcx().def_kind(self.def_id()), DefKind::Const)
     }
 
+    /// Builds the PAG. 
     pub fn build(&mut self) {
         self.visit_body();
 
@@ -137,11 +146,11 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
 
     pub fn visit_body(&mut self) {
         for bb in self.mir.basic_blocks.indices() {
-            self.visit_baisc_block(bb);
+            self.visit_basic_block(bb);
         }
     }
 
-    fn visit_baisc_block(&mut self, bb: mir::BasicBlock) {
+    fn visit_basic_block(&mut self, bb: mir::BasicBlock) {
         let mir::BasicBlockData {
             ref statements,
             ref terminator,
@@ -189,28 +198,29 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// Write the RHS Rvalue to the LHS Place.
+    /// An assignment statement writes the RHS Rvalue to the LHS Place.
     fn visit_assign(&mut self, place: &mir::Place<'tcx>, rvalue: &mir::Rvalue<'tcx>) {
         let (lh_path, lh_type) = self.get_path_and_type_for_place(place);
 
-        // Skip this assignment if the destination path is not pointer type or an adt containing pointer fields
-        // The lh type maybe a opaque type which need to be determined by the rh type
+        // Skip this assignment if the destination path is not pointer and does not 
+        // contain pointer type fields. 
+        // The lh type maybe a opaque type, we need to determine the actual type 
+        // according to the rh type.
         if !lh_type.is_any_ptr() && self.acx.get_pointer_projections(lh_type).is_empty() {
             return;
         }
 
         self.visit_rvalue(lh_path.clone(), rvalue);
 
-        // If this assignment writes to a field or subfield of a union, add edges between the union fields that
-        // share the same memory offset 
+        // If this assignment writes to a field or subfield of a union, add edges 
+        // between the union fields that share the same memory offset.
         self.cast_between_union_fields(&lh_path);
     }
 
     /// Denotes a call to the intrinsic function copy_nonoverlapping, where `src` and `dst` denotes the
-    /// memory being read from and written to (`src` and `dst` must each be a reference, pointer, or Box
-    /// pointing to the same type T) and count indicates how many bytes are being copied over (count must
-    /// evaluate to a usize).
-    /// Can be regarded as `*dst = *src`
+    /// memory being read from and written to and size indicates how many bytes are being copied over.
+    /// `src` and `dst` must each be a reference, pointer, or `Box` pointing to the same type T.
+    /// A copy_nonoverlapping statement can be regarded as a statement like `*dst = *src`.
     fn visit_copy_non_overlapping(&mut self, copy_info: &mir::CopyNonOverlapping<'tcx>) {
         let mut get_ptr_path = |operand: &mir::Operand<'tcx>| -> Rc<Path> {
             match operand {
@@ -251,7 +261,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         );
     }
 
-    /// Write the discriminant for a variant to the enum Place.
+    /// Writes the discriminant for a variant to the enum Place.
     fn visit_set_discriminant(
         &mut self,
         _place: &mir::Place<'tcx>,
@@ -259,7 +269,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
     ) {
     }
 
-    /// Deinitializes the place. This writes uninit bytes to the entire place.
+    /// Deinitializes the place. This writes `uninit` bytes to the entire place.
     fn visit_deinit(&mut self, _place: &mir::Place<'tcx>) {}
 
     /// Start a live range for the storage of the local.
@@ -291,7 +301,8 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// We only consider the call statements currently.
+    /// Terminator for a basic block. 
+    /// We only analyze the call statements in a flow-insensitive pointer analysis.
     fn visit_terminator(
         &mut self,
         location: mir::Location,
@@ -388,7 +399,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         args_paths
     }
 
-    /// Calls a specialized visitor for each kind of Rvalue
+    /// Calls a specialized visitor for each kind of Rvalue.
     fn visit_rvalue(&mut self, lh_path: Rc<Path>, rvalue: &mir::Rvalue<'tcx>) {
         match rvalue {
             mir::Rvalue::Use(operand) => {
@@ -428,7 +439,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// path = x (either a move or copy, depending on type of x), or path = constant.
+    /// `path = x` (either a move or copy, depending on type of `x`), or `path = constant`.
     fn visit_use(&mut self, lh_path: Rc<Path>, operand: &mir::Operand<'tcx>) {
         match operand {
             // Currently we do not seperate copy and move cases.
@@ -458,7 +469,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
             self.acx.set_path_rustc_type(lh_path.clone(), rh_type);
         }
 
-        // Assignment of format: (*lbase).elem = (*rbase).elem
+        // An assignment of format: (*lbase).elem = (*rbase).elem
         if lh_path.is_deref_path() && rh_path.is_deref_path() {
             debug!(
                 "Assignment: (*lbase).elem = (*rbase).elem: {:?} = {:?}",
@@ -506,8 +517,8 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         };
     }
 
-    /// Returns a value that corresponds to the given literal
-    pub fn visit_const_operand(&mut self, const_op: &mir::ConstOperand<'tcx>) -> Rc<Path> {
+    /// Returns a value that corresponds to the given literal.
+    fn visit_const_operand(&mut self, const_op: &mir::ConstOperand<'tcx>) -> Rc<Path> {
         let mir::ConstOperand { const_, .. } = const_op;
         match const_ {
             // This constant came from the type system
@@ -519,14 +530,14 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// Synthesizes a constant value from a RustC constant as used in the type system
-    pub fn visit_const(&mut self, c: &ty::Const<'tcx>) -> Rc<Path> {
+    /// Synthesizes a constant value from a RustC constant as used in the type system.
+    fn visit_const(&mut self, c: &ty::Const<'tcx>) -> Rc<Path> {
         debug!("Visiting constant came from the type system: {c:?}");
         Path::new_constant()
     }
 
     /// Synthesizes a constant value from an unevaluated mir constant which is not part of the type system.
-    pub fn visit_unevaluated_const(
+    fn visit_unevaluated_const(
         &mut self,
         unevaluated: &mir::UnevaluatedConst<'tcx>,
         ty: Ty<'tcx>,
@@ -614,7 +625,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
     }
 
     /// Creates an array where each element is the value of the operand.
-    /// Corresponds to source code like [x; 32].
+    /// Corresponds to source code like `[x; 32]`.
     fn visit_repeat(&mut self, lh_path: Rc<Path>, operand: &mir::Operand<'tcx>, _count: &Const<'tcx>) {
         let lh_type = self.acx.get_path_rustc_type(&lh_path).unwrap();
         if let TyKind::Array(elem_ty, _) = lh_type.kind() {
@@ -624,17 +635,18 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// Currently we do not seperate ref and address_of assignments.
-    /// Ref: Creates a reference of the indicated kind to the place. e.g.path = &x or &mut x
+    /// Analyzes the `ref` and `address_of` assignments.
+    /// 
+    /// Ref: Creates a reference of the indicated kind to the place. e.g. `path = &x` or `&mut x`
     /// AddressOf: Creates a pointer with the indicated mutability to the place.
-    ///            This is generated by pointer casts like &v as *const _ or raw address of
-    ///            expressions like &raw v or addr_of!(v).
+    ///            This is generated by pointer casts like `&v` as `*const _` or raw address of
+    ///            expressions like `&raw v` or `addr_of!(v)`.
     fn visit_ref_or_address_of(&mut self, lh_path: Rc<Path>, place: &mir::Place<'tcx>) {
         // debug!("Ref/AddressOf Assignment");
         let rh_path = self.get_path_for_place(place);
 
         // If the lh_path is a deref path, we need to add a temporary local variable,
-        // e.g. (*_1).2 = &rh_path; ==> _TMP = &rh_path; (*_1).2 = _TMP;
+        // e.g. `(*_1).2 = &rh_path;` ==> `_TMP = &rh_path; (*_1).2 = _TMP`;
         let lh_path = if lh_path.is_deref_path() {
             let lh_type = self.acx.get_path_rustc_type(&lh_path).unwrap();
             let aux = self.create_aux_local(lh_type);
@@ -743,18 +755,19 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
             // Go from a safe fn pointer to an unsafe fn pointer.
             | mir::CastKind::PointerCoercion(PointerCoercion::UnsafeFnPointer) => {
                 // These kinds of pointer casts do not re-interpret the bits of the input as a 
-                // different type. We simply treat them as simple assignments.
-                match operand {
+                // different type. We simply treat them as direct assignments.
+                let rh_path = match operand {
                     mir::Operand::Move(place) | mir::Operand::Copy(place) => {
-                        let rh_path = self.get_path_for_place(place);
-                        self.add_direct_edge(rh_path, lh_path);
+                        self.get_path_for_place(place)
                     }
-                    _ => {
-                        unreachable!("
-                            Unexpected type of operand in MutToConstPointer/UnsafeFnPointer pointer cast!"
+                    mir::Operand::Constant(box const_op) => {
+                        debug!("
+                            DynStar/MutToConstPointer/UnsafeFnPointer cast from a const operand!"
                         );
+                        self.visit_const_operand(const_op)
                     }
-                }
+                };
+                self.add_direct_edge(rh_path, lh_path);
             }
             // Go from a fn-item type to a fn-pointer type.
             // For example: ``` p = foo as fn(i32) -> i32 (Pointer(ReifyFnPointer)); ```
@@ -899,8 +912,6 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
     }
 
     /// Creates an aggregate value, like a tuple or struct.
-    /// This is needed because dataflow analysis needs to distinguish dest = Foo { x: ..., y: ... } 
-    /// from dest.x = ...; dest.y = ...; in the case that Foo has a destructor.
     fn visit_aggregate(
         &mut self,
         lh_path: Rc<Path>,
@@ -982,7 +993,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// Transmutes a `*mut u8` into shallow-initialized `Box<T>`.
+    /// Transmutes a `*mut u8` into a shallow-initialized `Box<T>`.
     ///
     /// This is different from a normal transmute because dataflow analysis will treat the box
     /// as initialized but its content as uninitialized.
@@ -1004,7 +1015,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
     }
 
 
-    /// Handle the statically dispatched and dynamically dispatched calls. 
+    /// Try to resolve a function calls. 
     fn resolve_call(
         &mut self,
         callee_def_id: &DefId,
@@ -1088,7 +1099,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
     ) {
         // The fn_traits feature allows for implementation of the Fn* traits for
         // creating custom closure-like types. We first try to devirtualize the callee function
-        // https://doc.rust-lang.org/beta/unstable-book/library-features/fn-traits.html
+        // <https://doc.rust-lang.org/beta/unstable-book/library-features/fn-traits.html>
         let param_env = rustc_middle::ty::ParamEnv::reveal_all();
         // Instance::resolve panics if try_normalize_erasing_regions returns an error.
         // It is hard to figure out exactly when this will be the case.
@@ -1162,11 +1173,12 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// Fn::call, FnMut::call_mut, FnOnce::call_once all receive two arguments:
-    /// 1. Operand of any type that implements Fn|FnMut|FnOnce, a function pointer or closure instance for most cases.
+    /// `Fn::call`, `FnMut::call_mut`, `FnOnce::call_once` all receive two arguments:
+    /// 1. An operand of any type that implements `Fn`|`FnMut`|`FnOnce`, including function items, 
+    ///    function pointers and closures.
     /// 2. A tuple of argument values for the call.
     /// The tuple is unpacked and the callee is then invoked with its normal function signature.
-    /// In the case of calling a closure, the closure signature includes the closure as the first argument.
+    /// In the case of calling a closure, the closure is included as the first argument.
     ///
     /// All of this happens in code that is not encoded as MIR, so we need built in support for it.
     pub fn inline_indirectly_called_function(
@@ -1303,8 +1315,8 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-        /// If the source path and destination path are both of pointer types, add a direct edge between them. 
-    /// Otherwise, get the pointer fields if exist and add internal edges between the pointer fields.
+    /// If the source path and the destination path are both of pointer types, add a direct edge between them. 
+    /// Otherwise, get their pointer type fields if exist and add internal edges between these fields.
     pub fn add_internal_edges(
         &mut self,
         src_path: Rc<Path>,
@@ -1345,7 +1357,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
     }
 
 
-    /// Add edges between the union fields that share the same memory offset (in projection path_repr mode only)
+    /// Adds edges between the union fields that share the same memory offset
     fn cast_between_union_fields(&mut self, path: &Rc<Path>) {
         let retrieve_union_fields = |path: &Rc<Path>| -> Vec<(Rc<Path>, usize)> {
             let mut ret = Vec::new();
@@ -1433,15 +1445,12 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
     }
 
     /// Creates an auxiliary local variable with the given type.
-    /// Returns the path of the auxiliary local variable.
     #[inline]
     pub fn create_aux_local(&mut self, ty: Ty<'tcx>) -> Rc<Path> {
         self.acx.create_aux_local(self.func_id, ty)
     }
 
-    /// Creates a path that dereferences the given pointer or reference path.
-    /// Auxiliary variables are created if the given path is a qualified path.
-    /// Returns the derefernce path.
+    /// Creates a dereference path for the given pointer or reference path.
     #[allow(unused)]
     fn create_dereference(&mut self, ptr_path: Rc<Path>, ptr_ty: Ty<'tcx>) -> Rc<Path> {
         let deref_path = if let PathEnum::QualifiedPath { .. } = ptr_path.value {
@@ -1456,7 +1465,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         deref_path
     }
 
-    /// Returns a parameter environment for the current function.
+    /// Returns the parameter environment for the current function.
     pub fn get_param_env(&self) -> rustc_middle::ty::ParamEnv<'tcx> {
         let def_id = self.def_id();
         let env_def_id = if self.tcx().is_closure_or_coroutine(def_id) {
@@ -1467,8 +1476,8 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         self.tcx().param_env(env_def_id)
     }
 
-    /// Copy the value at source_path to a value at target_path.
-    /// If the type of value at source_path is different from that at target_path, the value is transmuted.
+    /// Copy the value at `source_path` to a value at `target_path`.
+    /// If the type of `source_path` is different from that at `target_path`, the value is transmuted.
     pub fn copy_and_transmute(
         &mut self,
         source_path: Rc<Path>,
@@ -1525,8 +1534,8 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
     }
 
     // Transmute from one pointer to another pointer.
-    // If the source and target pointers are if the equivalent pointer types, add 
-    // a direct edge between them, otherwise add a cast edge between them 
+    // If the source and target pointers are of equivalent pointer types, add 
+    // a direct edge between them, otherwise add a cast edge between them.
     fn transmute_pointers(
         &mut self,
         source_path: Rc<Path>,
@@ -1563,7 +1572,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    // Returns a Function path for the given def_id and substs, even if the corresponding mir
+    // Returns a Function path for the given `def_id` and `gen_args`, no matter if the corresponding mir
     // is unavailable.
     // If the function refers to a specific implementation of a trait method, devirtualize it.
     fn visit_function_reference(&mut self, def_id: DefId, gen_args: GenericArgsRef<'tcx>) -> Rc<Path> {
@@ -1601,7 +1610,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         (path, ty)
     }
 
-    /// Returns a Path instance that is essentially the same as the Place instance
+    /// Returns a `Path` instance that resembles the `Place` instance.
     fn get_path_for_place(&mut self, place: &mir::Place<'tcx>) -> Rc<Path> {
         if let Some(path) = self.path_cache.get(place) {
             return path.clone();
@@ -1623,7 +1632,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// Returns a path that is qualified by the selector corresponding to projection.elem.
+    /// Returns a path that is qualified by the selector corresponding to the projection.elem.
     /// If projection has a base, the give base_path is first qualified with the base.
     fn visit_projection(
         &mut self,
@@ -1694,7 +1703,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         (result, ty)
     }
 
-    /// Returns a PathSelector instance that is essentially the same as the ProjectionElem instance
+    /// Returns a PathSelector instance that resembles the ProjectionElem instance.
     fn visit_projection_elem(
         &mut self,
         base_ty: Ty<'tcx>,
@@ -1725,10 +1734,8 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// Return the path of the pointer at field 0 of the NonNull pointer at field 0
-    /// of the Unique pointer at field 0 of the box
-    /// create an auxiliary variable to represent this sub-field.
-    pub fn get_box_pointer_field(&mut self, box_path: Rc<Path>, ty: Ty<'tcx>) -> Rc<Path> {
+    /// Returns the raw pointer field of a `Box` value. 
+    fn get_box_pointer_field(&mut self, box_path: Rc<Path>, ty: Ty<'tcx>) -> Rc<Path> {
         // Box.0 = Unique, Unique.0 = NonNull, NonNull.0 = source thin pointer
         let projection = vec![
             PathSelector::Field(0),
@@ -1757,7 +1764,8 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         self.add_edge(src, dst, PAGEdgeEnum::DirectPAGEdge);
     }
 
-    /// For (*p).f1.f2...fn = q, add a Store edge 'q --STORE(f1.f2...fn)--> p'
+    /// Adds a store edge from `src` to `dst`.
+    /// Given a store statement ```(*p).f1.f2...fn = q```, a store edge of format `q --STORE(f1.f2...fn)--> p` is added.
     #[inline]
     pub fn add_store_edge(&mut self, src: Rc<Path>, dst: Rc<Path>) {
         if let PathEnum::QualifiedPath { base, projection } = &dst.value {
@@ -1769,7 +1777,8 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// For p = (*q).f1.f2...fn, add a Load edge 'q --LOAD(f1.f2...fn)--> p'
+    /// Adds a load edge from `src` to `dst`.
+    /// Given a load statement ```p = (*q).f1.f2...fn```, a Load edge `q --LOAD(f1.f2...fn)--> p` is added.
     #[inline]
     pub fn add_load_edge(&mut self, src: Rc<Path>, dst: Rc<Path>) {
         if let PathEnum::QualifiedPath { base, projection } = &src.value {
@@ -1781,7 +1790,8 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// For p = &((*q).f1.f2...fn), add a Gep edge 'q --GEP(f1.f2...fn)--> p'
+    /// Adds a gep edge from `src` to `dst`.
+    /// Given a gep statement ```p = &((*q).f1.f2...fn)```, a gep edge `q --GEP(f1.f2...fn)--> p` is added.
     #[inline]
     pub fn add_gep_edge(&mut self, src: Rc<Path>, dst: Rc<Path>) {
         if let PathEnum::QualifiedPath { base, projection } = &src.value {
@@ -1809,7 +1819,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         self.fpag.add_internal_edge(src, dst, kind);
     }
     
-    /// Create a new callsite
+    /// Creates a new callsite.
     fn new_callsite(
         &mut self,
         func_id: FuncId,

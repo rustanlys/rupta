@@ -13,8 +13,8 @@ const CHUNK_CAP: usize = 60;
 
 /// This queue is implemented as a linked list of chunks, where each chunk is a small buffer
 /// that can hold a handful of elements.
-/// Chunks need to be dynamically allocated as elements get pushed,
-/// this queue is supposed to be faster thanthan [`LinkedList`].
+/// Chunks need to be dynamically allocated as elements get pushed.
+/// This queue is supposed to be faster thanthan `LinkedList`.
 pub struct ChunkedQueue<T> {
     head: NonNull<Chunk<T>>,
     tail: NonNull<Chunk<T>>,

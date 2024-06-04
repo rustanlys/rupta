@@ -1,5 +1,6 @@
-/// Modified from rustc_index::bit_set, see
-/// https://doc.rust-lang.org/stable/nightly-rustc/src/rustc_index/bit_set.rs.html
+//! Our implemention of bit vector is modifed from `rustc_index::bit_set`, see
+//! <https://doc.rust-lang.org/stable/nightly-rustc/src/rustc_index/bit_set.rs.html>
+
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;

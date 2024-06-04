@@ -13,13 +13,13 @@ use std::rc::Rc;
 
 rustc_index::newtype_index! {
     /// The unique identifier for each function reference.
-    /// Every unique instantiation of a generic function will have a different function_id but the same def_id.
+    /// Every unique instantiation of a generic function will have a different func_id.
     #[orderable]
     #[debug_format = "FuncId({})"]
     pub struct FuncId {}
 }
 
-/// Context-sensitive function consisting of a context_id (cid) and a function id (func_id). 
+/// Context-sensitive function consisting of a context id (cid) and a function id (func_id). 
 #[derive(Copy, Clone, Debug, Eq, PartialOrd, PartialEq, Hash, Ord)]
 pub struct CSFuncId {
     pub cid: ContextId,
@@ -52,8 +52,7 @@ pub struct FunctionReference<'tcx> {
     pub promoted: Option<Promoted>,
 }
 
-/// We cannot implement the Clone and Hash trait for GenericArgKind,
-/// therefore we provide a similar enum type as GenericArgKind
+/// Resembles the `GenericArgKind` type in rustc.
 #[derive(Clone, Debug, Eq, PartialOrd, PartialEq, Hash, Ord)]
 pub enum GenericArgE<'tcx> {
     Region,

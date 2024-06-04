@@ -15,15 +15,15 @@ use crate::mir::path::{Path, CSPath};
 
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-/// The type of a call graph edge
+/// The type of a call graph edge.
 pub enum CallType {
-    // Calls resolved by static dispatch, including static Fn* trait calls
+    // Calls resolved via static dispatch, including static Fn* trait calls.
     StaticDispatch,
-    // Calls resolved by dynamic dispatch, excluding dynamic Fn* trait calls
+    // Calls resolved via dynamic dispatch, excluding dynamic Fn* trait calls.
     DynamicDispatch,
-    // Fn* trait calls resolved by dynamic dispatch
+    // Fn* trait calls resolved via dynamic dispatch.
     DynamicFnTrait,
-    // function pointer calls
+    // function pointer calls.
     FnPtr,
 }
 
@@ -34,6 +34,7 @@ pub type CSCallSite = CallSiteS<CSFuncId, Rc<CSPath>>;
 
 pub type CalleeIdentifier<'tcx> = (DefId, GenericArgsRef<'tcx>);
 
+/// A base callsite, consisting of the basic information, i.e. the call's location in the code. 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BaseCallSiteS<F> {
     pub func: F,
@@ -46,6 +47,7 @@ impl<F> BaseCallSiteS<F> {
     }
 }
 
+/// A callsite, consisting of the call's location, the arguments and the destination. 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct CallSiteS<F, P> {
     pub func: F,
@@ -65,7 +67,7 @@ impl<F, P> CallSiteS<F, P> {
     }
 }
 
-
+/// A detailed callsite, including information of callee's def_id and generic args.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ExtCallSiteS<'tcx, F, P> {
     pub callsite: Rc<CallSiteS<F, P>>,
@@ -138,7 +140,7 @@ impl From<&Rc<CSCallSite>> for CSBaseCallSite {
     }
 }
 
-/// Function calls associated with an instance, a dynamic object or a function pointer 
+/// Function calls associated with an instance, a dynamic object or a function pointer.
 pub struct AssocCallGroup<I, F, P> {
     // Pairs of the self pointer and the associated function callsites that can be statically dispatched.
     pub(crate) static_dispatch_instance_calls: HashMap<I, HashSet<(Rc<CallSiteS<F, P>>, FuncId)>>,

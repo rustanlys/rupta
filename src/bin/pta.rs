@@ -3,6 +3,11 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! The main routine of `rupta`.
+//! 
+//! Implemented as a stub that invokes the rust compiler with a call back to execute 
+//! pointer analysis during rust compilation.
+
 #![feature(rustc_private)]
 
 extern crate rustc_driver;

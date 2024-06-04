@@ -3,6 +3,8 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! Contexts used in context-sensitive pointer analysis.
+
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Result};
 use std::hash::Hash;
@@ -23,6 +25,7 @@ rustc_index::newtype_index! {
 
 pub trait ContextElement: Clone + Eq + PartialEq + Debug + Hash {}
 
+/// A context is composed of a list of context elements, e.g. callsites.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Context<E: ContextElement> {
     pub(crate) context_elems: Vec<E>,
@@ -50,8 +53,8 @@ impl<E: ContextElement> Context<E> {
         self.context_elems.len()
     }
 
-    /// Compose a new context from a given context and a new context element.
-    /// Discard the last old context element if the length of context exceeds the depth limit  
+    /// Composes a new context from a given context and a new context element.
+    /// Discard the last old context element if the length of context exceeds the depth limit.
     pub fn new_k_limited_context(old_ctx: &Rc<Context<E>>, elem: E, k: usize) -> Rc<Self> {
         let mut elems = Vec::with_capacity(k);
         if k > 0 {
@@ -85,6 +88,7 @@ impl<E: ContextElement> Context<E> {
 }
 
 
+/// Maintaing the contexts used.
 #[derive(Debug)]
 pub struct ContextCache<E: ContextElement> {
     context_list: IndexVec<ContextId, Rc<Context<E>>>,
@@ -105,7 +109,7 @@ impl<E: ContextElement> ContextCache<E> {
         }
     }
 
-    /// Returns a non zero index that can be used to retrieve context via get_context.
+    /// Returns a non zero index that can be used to retrieve context via `get_context`.
     pub fn get_context_id(&mut self, context: &Rc<Context<E>>) -> ContextId {
         if let Some(id) = self.context_to_index_map.get(context) {
             *id

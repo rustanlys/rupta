@@ -3,6 +3,23 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! Specializes generic types to concrete types.
+//! 
+//! Adapted primarily from the code in [MIRAI](<https://github.com/facebookexperimental/MIRAI>).
+//! 
+//! For example:
+//!
+//! ```no_run
+//! fn foo<T>(t: T) {}
+//! fn bar<U, V>(u: U, v: V) { foo(u); foo(v); }
+//! fn main() { bar(3, 4.0); }
+//! ```
+//!
+//! The function `bar` is invoked in `main` with generic arguments `[i32, f64]`.
+//! During analysis, we specialize the types of `u` and `v` in `bar` to `i32` and `f64` respectively.
+//! The calls to `foo(u)` and `foo(v)` can therefore be resolved to `foo::<i32>(u)` and 
+//! `foo::<f64>(v)` respectively.
+
 use log::*;
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -18,20 +35,7 @@ use rustc_span::def_id::DefId;
 use crate::mir::function::GenericArgE;
 use crate::util::type_util;
 
-/// Adapted from type_visitor in MIRAI (https://github.com/facebookexperimental/MIRAI)
-/// Specializes generic types with the concrete substituions
-///
-/// For example given:
-///
-/// ```no_run
-/// fn foo<T>(t: T) {}
-/// fn bar<U, V>(u: U, v: V) { foo(u); foo(v); }
-/// fn main() { bar(3, 4.0); }
-/// ```
-///
-/// The substs of `bar` is `[i32, f64]` for the invocation in `main`.
-/// Then we can specialize the locals' types in `bar` using the substs.
-/// We can further resolve `foo(u)` as `foo<i32>(u)` and `foo<v>` as `foo<64>(v)`.
+
 pub struct SubstsSpecializer<'tcx> {
     pub tcx: TyCtxt<'tcx>,
     pub generic_args: Vec<GenericArgE<'tcx>>,
@@ -167,7 +171,7 @@ impl<'tcx> SubstsSpecializer<'tcx> {
             };
         }
 
-        // If the type is a opaque type, substitute it with the concrete type.
+        // If the type is an opaque type, substitute it with the concrete type.
         // An opaque type is usually from impl Trait in type aliases or function return types
         if let TyKind::Alias(
             rustc_middle::ty::Opaque, 
@@ -185,8 +189,6 @@ impl<'tcx> SubstsSpecializer<'tcx> {
             return specialized_type;
         }
 
-        // We do not skip when the generic args is empty. Because we still need to specialize the opaque types
-        // contained in the adt's generic args.
         match gen_arg_type.kind() {
             TyKind::Adt(def, args) => {
                 Ty::new_adt(self.tcx, *def, self.specialize_generic_args(args))

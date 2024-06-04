@@ -12,25 +12,26 @@ use crate::mir::function::FuncId;
 use crate::mir::path::Path;
 use crate::util::chunked_queue::{self, ChunkedQueue};
 
-/// A tuple type consisiting of source path, destination path and path edge type
+/// An edge consists of the source path, the destination path and the PAG edge type.
 pub type InternalEdge = (Rc<Path>, Rc<Path>, PAGEdgeEnum);
 
+/// A function's pointer assignment graph, part of the whole program's PAG.
 pub struct FuncPAG {
     pub(crate) func_id: FuncId,
     pub(crate) internal_edges: ChunkedQueue<InternalEdge>,
     pub(crate) static_variables_involved: HashSet<Rc<Path>>,
 
-    // Call sites that can be statically resolved, including the Fn* trait calls that can 
+    // Calls that can be statically resolved, including the Fn* trait calls that can 
     // be directly resolved. 
     pub(crate) static_dispatch_callsites: Vec<(Rc<CallSite>, FuncId)>,
-    // Special calls like alloc() 
+    // Special calls like alloc().
     pub(crate) special_callsites: Vec<(Rc<CallSite>, FuncId)>,
-    // Pairs of the dynamic type receiver and its corresponding callsite.
+    // Pairs of dynamic type receivers and their corresponding callsites.
     pub(crate) dynamic_dispatch_callsites: Vec<(Rc<Path>, Rc<CallSite>)>,
-    // Pairs of the first argument of Fn::call, FnMut::call_mut, FnOnce::call_once call
-    // and the callsite that need to be resolved on-the-fly
+    // Pairs of the first arguments of dynamic `Fn::call`, `FnMut::call_mut`, 
+    // `FnOnce::call_once` calls and the callsites.
     pub(crate) dynamic_fntrait_callsites: Vec<(Rc<Path>, Rc<CallSite>)>,
-    // Pairs of the function pointer and its corresponding callsite, including the fnptr
+    // Pairs of function pointers and their callsites, including the fnptr
     // callsites that are speciallized from a Fn* trait callsite.
     pub(crate) fnptr_callsites: Vec<(Rc<Path>, Rc<CallSite>)>,
 }

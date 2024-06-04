@@ -81,7 +81,7 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         self.acx.tcx
     }
 
-    /// Initialize analysis
+    /// Initialize the analysis.
     pub fn initialize(&mut self) {
         // add the entry point to the call graph
         let entry_point = self.acx.entry_point;
@@ -92,7 +92,7 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         self.process_reach_funcs();
     }
 
-    /// Solve the worklist problem by using Propagator
+    /// Solve the worklist problem using Propagator.
     pub fn propagate(&mut self) {
         let mut iter_proc_edge_iter = self.inter_proc_edges_queue.iter_copied();
         // Solve until no new call relationship is found.
@@ -120,7 +120,7 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// Process statements of reachable functions.
+    /// Process statements in reachable functions.
     fn process_reach_funcs(&mut self) {
         while let Some(func_id) = self.rf_iter.next() {
             if !self.processed_funcs.contains(&func_id) {
@@ -132,7 +132,7 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         }
     }
 
-    /// Adds internal edges of a function pag to pag.
+    /// Adds internal edges of a function pag to the whole program's pag.
     /// The function pag for the given def_id should be built before calling this function.
     pub fn add_fpag_edges(&mut self, func_id: FuncId) {
         if self.processed_funcs.contains(&func_id) {
@@ -224,13 +224,12 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         }
     }
 
-    // Get points-to data
     #[inline]
     pub fn get_pt_data(&self) -> &DiffPTDataTy {
         &self.pt_data
     }
 
-    /// Finalize analysis
+    /// Finalize the analysis.
     pub fn finalize(&self) {
         // dump call graph, points-to results
         results_dumper::dump_results(self.acx, &self.call_graph, &self.pt_data, &self.pag);

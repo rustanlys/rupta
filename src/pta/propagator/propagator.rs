@@ -3,6 +3,8 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! The key component of our pointer analysis. 
+
 use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 
@@ -20,6 +22,8 @@ use crate::pta::*;
 use crate::pts_set::points_to::PointsToSet;
 use crate::util::{self, chunked_queue, type_util};
 
+
+/// Propagating the points-to information along the PAG edges. 
 pub struct Propagator<'pta, 'tcx, 'compilation, F, P: PAGPath> {
     /// The analysis context
     pub(crate) acx: &'pta mut AnalysisContext<'tcx, 'compilation>,
@@ -108,8 +112,8 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
         }
     }
 
+    /// Initialize the worklist, activate new constraints.
     pub fn init_constraints(&mut self) {
-        // Initialize worklist, activate new constraints
         self.process_all_addr_edges();
         self.process_all_inter_proc_edges();
     }
