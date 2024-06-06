@@ -95,6 +95,10 @@ impl<'tcx> SubstsSpecializer<'tcx> {
                 let param_env = self
                     .tcx
                     .param_env(self.tcx.associated_item(item_def_id).container_id(self.tcx));
+                let new_proj_type = Ty::new_projection(self.tcx, projection.def_id, specialized_substs);
+                if let Ok(specialized_type) = self.tcx.try_normalize_erasing_regions(param_env, new_proj_type) {
+                    return specialized_type;
+                }
                 if let Ok(Some(instance)) = rustc_middle::ty::Instance::resolve(
                     self.tcx, 
                     param_env, 
