@@ -479,7 +479,8 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
                     })
                     .collect()
             } else {
-                unreachable!("Expected second type argument to be a tuple type");
+                // The argument may be a constant `()`. We currently did not cache the type for constants.
+                vec![]
             }
         };
 
@@ -938,7 +939,7 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
                 self.add_pts(fnptr, original_id)
             }
             _ => {
-                warn!("Propagate non-function item to function pointer!");
+                // warn!("Propagate a non-function item to function pointer!");
                 false
             }
         }
