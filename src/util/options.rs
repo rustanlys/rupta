@@ -33,7 +33,7 @@ fn make_options_parser() -> Command<'static> {
         .version(version())
         .arg(Arg::new("entry-func-name")
             .long("entry-func")
-            .takes_value(true) 
+            .takes_value(true)
             .help("The name of entry function from which the pointer analysis begins."))
         .arg(Arg::new("entry-func-id")
             .long("entry-id")
@@ -106,7 +106,7 @@ pub struct AnalysisOptions {
     pub context_depth: u32,
     // options for handling cast propagation
     pub cast_constraint: bool,
-    
+
     pub dump_stats: bool,
     pub call_graph_output: Option<String>,
     pub pts_output: Option<String>,
@@ -114,7 +114,7 @@ pub struct AnalysisOptions {
     pub type_indices_output: Option<String>,
     pub dyn_calls_output: Option<String>,
     pub unsafe_stat_output: Option<String>,
-    pub func_ctxts_output: Option<String>, 
+    pub func_ctxts_output: Option<String>,
 }
 
 impl Default for AnalysisOptions {
@@ -149,20 +149,25 @@ impl AnalysisOptions {
         }
         let pta_args = &args[0..pta_args_end];
         let matches = if !from_env && rustc_args_start == 0 {
-            // The arguments may not be intended for RUPTA and may get here via some tool, so do not 
+            // 1. 没找着那个--，说明这些参数很可能不是给Rupta准备的
+            // The arguments may not be intended for RUPTA and may get here via some tool, so do not
             // report errors here, but just assume that the arguments were not meant for RUPTA.
             match make_options_parser().try_get_matches_from(pta_args.iter())
             {
+                // 按照Rupta的参数格式解析还真就解析成功了，说明这些确实是Rupta的参数
                 Ok(matches) => {
                     // Looks like these are RUPTA options after all and there are no rustc options.
                     rustc_args_start = args.len();
                     matches
                 }
                 Err(e) => match e.kind() {
+                    // 实锤了这不是Rupta的参数，报错并将传入的参数args原样返回
+                    // 1.1. 原来是索要帮助信息的
                     ErrorKind::DisplayHelp => {
                         eprintln!("{e}");
                         return args.to_vec();
                     }
+                    // 1.2. 不知道是啥信息，原样返回给rustc用
                     ErrorKind::UnknownArgument => {
                         // Just send all of the arguments to rustc.
                         // Note that this means that RUPTA options and rustc options must always
@@ -170,21 +175,25 @@ impl AnalysisOptions {
                         // will stay unknown to RUPTA and will make rustc unhappy.
                         return args.to_vec();
                     }
+                    // 1.3. 其他错误，直接退出
                     _ => {
                         e.exit();
                     }
                 },
             }
         } else {
+            // 2. 找到了那个--，说明这些参数很可能是给Rupta准备的
             // This will display error diagnostics for arguments that are not valid for RUPTA.
             match make_options_parser().try_get_matches_from(pta_args.iter()) {
                 Ok(matches) => {
+                    // 除了重置一下rustc参数开始位置，其他和情况1一样
                     if rustc_args_start == 0 {
                         rustc_args_start = args.len();
                     }
                     matches
                 }
                 Err(e) => {
+                    // 直接退出
                     e.exit();
                 }
             }
@@ -202,13 +211,13 @@ impl AnalysisOptions {
                 _ => unreachable!(),
             }
         }
-        
+
         if let Some(depth) = matches.get_one::<u32>("context-depth") {
             self.context_depth = *depth;
         }
 
         self.cast_constraint = !matches.contains_id("no-cast-constraint");
-        
+
         self.dump_stats = matches.contains_id("dump-stats");
         self.call_graph_output = matches.get_one::<String>("call-graph-output").cloned();
         self.pts_output = matches.get_one::<String>("pts-output").cloned();
@@ -217,13 +226,13 @@ impl AnalysisOptions {
         self.dyn_calls_output = matches.get_one::<String>("dyn-calls-output").cloned();
         self.type_indices_output = matches.get_one::<String>("type-indices-output").cloned();
 
-        // If the user provide the input source code file path before the `--` token, 
+        // If the user provide the input source code file path before the `--` token,
         // add it to the rustc arguments.
         let mut rustc_args = args[rustc_args_start..].to_vec();
         if let Some(input) = matches.get_many::<String>("INPUT") {
             rustc_args.extend(input.cloned())
-        } 
-        
+        }
+
         rustc_args
     }
 
