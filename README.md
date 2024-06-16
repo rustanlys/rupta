@@ -56,7 +56,7 @@ Options:
 * `dump-pts`: Outputs the points-to analysis results.
 * `dump-mir`: Outputs the MIR for all reachable functions.
 
-Note: RUPTA requires substantial computational and memory resources to analyze large Rust projects. 
+Note: RUPTA requires substantial computational and memory resources to analyze large Rust projects. If you encounter excessively long analysis times—often due to many functions reachable from main() during the analysis—consider upgrading to a more powerful computing platform equipped with additional memory (e.g., 128GB) and faster CPUs.
 
 ## LOG
 
