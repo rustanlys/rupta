@@ -56,6 +56,8 @@ Options:
 * `dump-pts`: Outputs the points-to analysis results.
 * `dump-mir`: Outputs the MIR for all reachable functions.
 
+Note: RUPTA requires considerable computational and memory resources to analyze a large Rust project.
+
 ## LOG
 
 Set the `PTA_LOG` environment variable to enable logging:

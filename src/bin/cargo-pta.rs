@@ -12,7 +12,6 @@
 
 use cargo_metadata::Package;
 use log::info;
-use rustc_tools_util::VersionInfo;
 use serde_json;
 use std::env;
 use std::ffi::OsString;
@@ -34,11 +33,6 @@ const PTA_BUILD_STD: &str = "PTA_BUILD_STD";
 pub fn main() {
     if std::env::args().take_while(|a| a != "--").any(|a| a == "--help" || a == "-h") {
         println!("{}", CARGO_PTA_HELP);
-        return;
-    }
-    if std::env::args().any(|a| a == "--version" || a == "-V") {
-        let version_info = rustc_tools_util::get_version_info!();
-        println!("{}", version_info);
         return;
     }
 
