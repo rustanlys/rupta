@@ -40,7 +40,7 @@ pub struct AnalysisContext<'tcx, 'compilation> {
 
     pub functions: IndexVec<FuncId, Rc<FunctionReference<'tcx>>>,
     pub func_id_map: HashMap<Rc<FunctionReference<'tcx>>, FuncId>,
-    pub func_name_cache: HashMap<FuncId, Box<str>>, 
+    pub func_name_cache: HashMap<FuncId, Box<str>>,
 
     /// Provides a way to refer to a  `rustc_middle::ty::Ty` via a handle that does not have
     /// a life time specifier.
@@ -74,6 +74,7 @@ pub struct AnalysisContext<'tcx, 'compilation> {
 }
 
 impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
+    /// 想方设法地找到入口函数（因为这是构造自身所必须的），然后构造自身。
     pub fn new(
         session: &'compilation Session,
         tcx: TyCtxt<'tcx>,
