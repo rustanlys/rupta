@@ -34,6 +34,7 @@ pub type ObjectSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'pta
 
 pub struct ContextSensitivePTA<'pta, 'tcx, 'compilation, S: ContextStrategy> {
     /// The analysis context
+    /// oub(crate) = 只在当前crate中为pub，对于外部crate还是不可见的
     pub(crate) acx: &'pta mut AnalysisContext<'tcx, 'compilation>,
     /// Points-to data
     pub(crate) pt_data: DiffPTDataTy,
@@ -100,7 +101,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     #[inline]
     pub fn get_context_by_id(&self, context_id: ContextId) -> Rc<Context<S::E>> {
         self.ctx_strategy.get_context_by_id(context_id)
-        
+
     }
     #[inline]
     pub fn get_empty_context_id(&mut self) -> ContextId {
@@ -111,11 +112,15 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     pub fn initialize(&mut self) {
         // add the entry point to the call graph
         let entry_point = self.acx.entry_point;
+        // 申请一个新的ContextId
         let empty_context_id = self.get_empty_context_id();
+        // 查询entry_point的FuncId，即其在self.acx.functions数组中的索引
         let entry_func_id = self.acx.get_func_id(entry_point, self.tcx().mk_args(&[]));
+        //? initialize对self.call_graph做的唯一一个改动就是增加了entry_point的节点
         self.call_graph.add_node(CSFuncId::new(empty_context_id, entry_func_id));
 
         // process statements of reachable functions
+        // 好像是把入口函数找到之后就顺着它去找其他可达函数了
         self.process_reach_funcs();
     }
 
@@ -147,10 +152,11 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         }
     }
 
-    
+
     /// Process statements in reachable functions.
     fn process_reach_funcs(&mut self) {
         while let Some(func) = self.rf_iter.next() {
+            println!("{:#?}", func);
             if !self.processed_funcs.contains(&func) {
                 let func_ref = self.acx.get_function_reference(func.func_id);
                 info!(
@@ -273,7 +279,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                     let cs_callee = CSFuncId::new(callee_cid, *callee);
                     self.add_call_edge(callsite, &cs_callee);
                 }
-            } 
+            }
         } else {
             let callee_cid = self.ctx_strategy.new_static_call_context(callsite);
             let cs_callee = CSFuncId::new(callee_cid, *callee);
@@ -320,20 +326,20 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         match path.value() {
             PathEnum::Parameter { .. }
             | PathEnum::LocalVariable { .. }
-            | PathEnum::ReturnValue { .. } 
+            | PathEnum::ReturnValue { .. }
             | PathEnum::Auxiliary { .. }
             | PathEnum::QualifiedPath { .. }
             | PathEnum::OffsetPath { .. } => {
                 CSPath::new_cs_path(cid, path.clone())
             }
             PathEnum::HeapObj { .. } => {
-                // Directly use the context of the method for the heap objects 
+                // Directly use the context of the method for the heap objects
                 CSPath::new_cs_path(cid, path.clone())
             }
             PathEnum::Constant
             | PathEnum::StaticVariable { .. }
             | PathEnum::PromotedConstant { .. }
-            | PathEnum::Function(..) 
+            | PathEnum::Function(..)
             | PathEnum::PromotedStrRefArray
             | PathEnum::PromotedArgumentV1Array
             | PathEnum::Type(..) => {
@@ -370,7 +376,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     pub fn finalize(&self) {
         // dump call graph, points-to results
         results_dumper::dump_results(self.acx, &self.call_graph, &self.pt_data, &self.pag);
-        
+
         // dump pta statistics
         let pta_stat = ContextSensitiveStat::new(self);
         pta_stat.dump_stats();

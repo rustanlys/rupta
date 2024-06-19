@@ -206,6 +206,12 @@ fn call_cargo_on_target(target: &String, kind: &str) {
         );
     }
 
+    // 如果在这儿设置了日志相关的环境变量的话，原样传递到pta去
+    // if let Ok(pta_log_level) = env::var("PTA_LOG") {
+    //     println!("PTA_LOG={}", pta_log_level);
+    //     cmd.env("PTA_LOG", pta_log_level);
+    // }
+
     //* 接下来，要通过环境变量的方式将一些必要的信息传递给pta进程 */
     // Force cargo to recompile all dependencies with PTA friendly flags
     // 还记得pta和cargo check的第1点区别吗？
@@ -280,7 +286,7 @@ fn call_pta() {
     let extension = path.extension().map(|e| e.to_owned());
     // 去掉当前的可执行文件（一般是cargo_pta[.exe]）只留下可执行文件所在的目录的路径
     path.pop(); // remove the cargo_pta bit
-    // 加入pta可执行文件，令path指向pta可执行文件
+                // 加入pta可执行文件，令path指向pta可执行文件
     path.push("pta");
     // 如果旧可执行文件带有扩展名，那么新构造的也应当加上扩展名
     if let Some(ext) = extension {
@@ -291,6 +297,12 @@ fn call_pta() {
     // 把命令行参数的前两个跳过去，像这样：
     // cargo rustc [...] <-- 只取中括号包裹的部分
     cmd.args(std::env::args().skip(2));
+
+    // if let Ok(pta_log_level) = env::var("PTA_LOG") {
+    //     println!("PTA_LOG={}", pta_log_level);
+    //     cmd.env("PTA_LOG", pta_log_level);
+    // }
+
     let exit_status = cmd
         .spawn()
         .expect("could not run pta")
@@ -307,6 +319,7 @@ fn call_rustc() {
     // 尝试用环境变量中获得rustc所在的路径来运行rustc，如果没有，则用默认值"rustc"。
     let mut cmd = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc")));
     cmd.args(std::env::args().skip(2));
+
     let exit_status = cmd
         .spawn()
         .expect("could not run rustc")

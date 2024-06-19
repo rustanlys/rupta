@@ -242,6 +242,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         match self.func_id_map.entry(func_ref.clone()) {
             Entry::Occupied(o) => o.get().to_owned(),
             Entry::Vacant(v) => {
+                // 可见这个id: FuncId其实就是这个func_ref在self.functions中的索引
                 let id = self.functions.push(func_ref.clone());
                 self.func_name_cache
                     .insert(id, func_ref.to_string().into_boxed_str());
