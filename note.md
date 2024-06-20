@@ -120,7 +120,204 @@ pub type CallSiteSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'p
 
 在src/pta/context_sensitive.rs的process_reach_funcs中加了输出。
 
-run_pointer_analysis(66)
-rupta::pta::context_sensitive::ContextSensitivePTA::{new, analyze}
-
 ## 总体修改思路
+
+### 文件路径和`DefId`从哪里来？
+
+由于MIRAI能够输出函数所在的源代码文件路径，而Rupta没有这个机能，所以需要借鉴一下MIRAI是怎么做这件事情的。
+
+根据之前的调研，MIRAI会收集一个数组，内部的元素长这样：`(rustc_span::Span, (DefId, DefId))`，表示在Span中发生了第一个DefId函数调用第二个DefId函数的情况。结果发现可以这样获取函数调用发生的源代码路径：
+
+```rust
+// loc的类型就是rustc_span::Span
+let source_loc = loc.source_callsite();
+if let Ok(line_and_file) = source_map.span_to_lines(source_loc) {
+  // line_and_file的类型是FileLines
+  // pub struct FileLines {
+  //   pub file: Lrc<SourceFile>,
+  //   pub lines: Vec<LineInfo>,
+  //}
+  现在已经可以得知函数调用发生的位置了。
+}
+```
+
+由于我们关心的是函数**定义**发生的位置而不是调用，这里的代码撑死了只能给我们一些方向性的参考。而目前的主要矛盾是：这个`rustc_span::Span`的信息到底是在哪一步中收集获得的呢？
+
+经过简单的搜索，我们发现原来上述`(rustc_span::Span, (DefId, DefId))`信息是通过`CallGraph::CallGraph`方法加入到调用图中的，而后者在`call_visitor.rs`的第349行被调用了。我们马上直奔那里一探究竟。
+
+`CallVisitor::get_function_summary`中调用了上述加入新调用关系的方法。解读该函数发现信息来源是这样构成的：
+
+- 调用发生的位置`loc`来自于`CallVisitor`实例自身的`bv.current_span`，其中`bv`是个`BodyVisitor`。
+- 调用者的位置，即第一个`DefId`来自于`CallVisitor`实例自身的`bv.def_id`。结合MIR的特性很容易明白，实际上MIR中的每个Body就是一个函数。因此`bv.def_id`就是当前正在被分析的函数（即调用者caller）的`DefId`。
+- 被调用者的位置，即第二个`DefId`来自于函数传入的参数。我们可以暂且不管这个东西。
+
+#### 如何获取函数调用发生时的Span信息？
+
+于是，我们很好奇这个`bv`中的`current_span`是怎么获得的呢？于是我们回归到`BodyVisitor`的定义中，尝试寻找对`self.current_span`的赋值发生在哪里？
+
+第一处赋值发生在`BodyVisitor::new`方法中，但这次赋值只是给它赋值了一个全0的默认值，没有任何意义：
+
+```rust
+return BodyVisitor {
+  // -- snip --
+  current_span: rustc_span::DUMMY_SP,
+  // -- snip --
+}
+```
+
+除此以外，还有一个`BodyVisitor::reset_visitor_state`方法会将`self.current_span`重置为全0值。以上两个对`self.current_span`的赋值都不是我们要找的东西。
+
+实际上，真正能够更新这个值的代码在这两个地方：
+
+- `BodyVisitor::visit_statement`，它长这样
+  ```rust
+  fn visit_statement(&mut self, location: mir::Location, statement: &mir::Statement<'tcx>) {
+    debug!("env {:?}", self.bv.current_environment);
+    self.bv.current_location = location;
+    let mir::Statement { kind, source_info } = statement;
+    // 其中，source_info的数据类型是 &rustc_middle::mir::SourceInfo
+    self.bv.current_span = source_info.span;
+    // -- snip --
+  }
+  ```
+- `BodyVisitor::visit_terminator`，它长这样
+  ```rust
+  fn visit_terminator(
+    &mut self,
+    location: mir::Location,
+    kind: &mir::TerminatorKind<'tcx>,
+    source_info: mir::SourceInfo,
+  ) {
+    debug!("env {:?}", self.bv.current_environment);
+    self.bv.current_location = location;
+    self.bv.current_span = source_info.span;
+    // -- snip --
+  }
+  ```
+
+我们以前者为例分析这个`SourceInfo`的信息是从哪里来的。由函数签名可知这个`SourceInfo`是从函数参数中的`statement`提取得来，于是我们想知道这个`statement`是从哪里来的。追踪`visit_statement`方法可知其在`visit_basic_block`中被调用，而后者的运行逻辑大概是这样的：
+
+```rust
+pub fn visit_basic_block(
+  &mut self,
+  bb: mir::BasicBlock,
+  terminator_state: &mut HashMap<mir::BasicBlock, Environment>,
+) {
+  let mir::BasicBlockData {
+    ref statements,
+    ref terminator,
+    ..
+  } = &self.bv.mir[bb];
+  let mut location = bb.start_location();
+  let terminator_index = statements.len();
+
+  if !self.bv.check_for_errors {
+    while location.statement_index < terminator_index {
+      self.visit_statement(location, &statements[location.statement_index]);
+      check_for_early_return!(self.bv);
+      location.statement_index += 1;
+    }
+    // -- snip --
+  }
+  // -- snip --
+}
+```
+
+用文字描述这个过程就是：
+
+1. 这个函数接收了一个基本块，`bb: rustc_middle::mir::BasicBlock`，并利用之从`self.bv.mir`中索引到了该基本块的信息，其中就包含了该基本块中的所有**语句**组成的数组**statements**。
+2. 声明一个可变变量`location`，初始化为该基本块的起始位置。
+3. 利用上述变量进行索引，调用前文提及的`self.visit_statement`遍历该基本块中的所有语句，方法就是`statements[location.statement_index]`。
+
+**这就引出了另一个问题**：`self.bv.mir`**又是从哪里来的**？通过阅读代码知道这个东西只在`BodyVisitor`的构造函数中发生过唯一一次赋值，而这个构造函数的唯一参数就是一个`BodyVisitor`，由此这个问题就转变为了：`BodyVisitor`的`mir`成员是从哪里来的？
+
+这个问题在`BodyVisitor::new`中得到了解答，这个构造函数接收一个Body的`DefId`然后构造一个`BodyVisitor`实例，而这个`Body`的`mir`成员则是从`tcx`中获得的：
+
+```rust
+pub fn new(
+  crate_visitor: &'analysis mut CrateVisitor<'compilation, 'tcx>,
+  def_id: DefId,
+  // -- snip --
+) -> BodyVisitor<'analysis, 'compilation, 'tcx> {
+  let tcx = crate_visitor.tcx;
+  // --snip --
+  let mir = if tcx.is_const_fn_raw(def_id) {
+    tcx.mir_for_ctfe(def_id)
+  } else {
+    let def = rustc_middle::ty::InstanceDef::Item(def_id);
+    tcx.instance_mir(def)
+  };
+  // --snip --
+}
+```
+
+由此我们可以知道，`BodyVisitor::mir`可以通过给定一个`TyCtxt`和`DefId`唯一确定，其确定算法即为上述代码。虽然不知道它的实际含义，但是照猫画虎还是比较简单的。
+
+**还有一个问题没解决：这个**`bb`**又是怎么来的**？这就必须追踪`BlockVisitor::visit_basic_block`的调用链了。经过搜索，发现是这样的：
+
+```mermaid
+graph
+Z[BodyVisitor::visit_basic_block]
+Y[FixedPointVisitor::visit_basic_block]
+X[BodyVisitor::check_for_errors]
+
+Target[BlockVisitor::visit_basic_block]
+
+X -->|遍历自己的参数block_indices，里面全是bb| Z
+Z -->|把自己的所有参数原样传递给| Target
+Y -->|把自己的参数bb原样传递给| Target
+```
+
+其中左边那个`check_for_errors`分支的调用有两处，而且这两处都长成一个样子：
+
+```rust
+fixed_point_visitor.bv.check_for_errors(
+  &fixed_point_visitor.block_indices,
+  &mut fixed_point_visitor.terminator_state,
+);
+```
+
+显然装着一堆`bb`的`block_indices`是从`FixedPointerVisitor`那边搞来的。
+
+右边那个`FixedPointVisitor::visit_basic_block`的`bb`来源也是一样，最终都指向了`FixedPointerVisitor`的`block_indices`成员。于是问题就转变成了：这个成员是在哪里赋值的？结果在`FixedPointerVisitor::new`中发现了端倪：这个构造函数接受一个`BodyVisitor`，并直接
+
+```rust
+let dominators = body_visitor.mir.basic_blocks.dominators();
+let (block_indices, loop_anchors) = get_sorted_block_indices(body_visitor.mir, dominators);
+```
+
+后边那个函数只是对基本块做了一下拓扑排序而已，本质上`bb`的来源就是`BodyVisitor::mir::basic_blocks`罢了。而`BodyVisitor::mir`的来源，上文已经分析过了。
+
+
+#### 如何获取一个函数的`DefId`？
+
+于是，我们很好奇这个`bv`中的`def_id`是怎么获得的呢？于是跳转到该结构体的定义中一看，原来它的`DefId`是从构造函数中传进来的，不是自己分析获得的。没事，看看谁调用了`BodyVisitor::new`呢？一搜索发现有两处：
+
+- 一处在`CallVisitor::create_and_cache_function_summary`中，如果发现被调用者有MIR表示，就新建一个`BodyVisitor`去分析被调用者的函数调用情况去了。这里`def_id`的来源很明了，就是被调用者的`def_id`。
+- 另一处在`CrateVisitor::analyze_body`中，这儿的`def_id`仍然是外界传进来的，搜索发现这个`analyze_body`方法是在`CrateVisitor::analyze_some_bodies`方法中**计算**获得的，好家伙终于找到源头了！！
+
+我们重点关注后者的`DefId`是怎么计算获得的。我们发现有几处不同的计算`DefId`的方法：
+
+- 通过分析入口函数找到入口函数的`DefId`
+  ```rust
+  // Get the entry function
+  let entry_fn_def_id = if let Some((def_id, _)) = self.tcx.entry_fn(()) {
+      def_id
+  } else {
+      DefId::local(DefIndex::from_u32(0))
+  };
+  ```
+  这儿的`self.tcx`的类型是`TyCtxt<'tcx>`，其来源即为`rustc_driver::Callbacks`中`after_analysis`方法回调函数中，对其传入的参数`queries`经处理后调用`enter`方法时，传递给闭包的第一个参数，也就是说这个`tcx`是编译器给出的一手信息，未经过MIRAI二次处理。
+- 通过遍历HIR的BodyOwners获取各个Body的`DefId`
+  ```rust
+  for local_def_id in self.tcx.hir().body_owners() {
+    let def_id = local_def_id.to_def_id();
+    // -- snip --
+    self.analyze_body(def_id);
+  }
+  ```
+  至此，我们把如何获得一个函数的`DefId`的方法梳理完成了。总结起来，大致是如下流程：
+
+  1. 从回调函数`after_analysis`的参数`rustc_interface::queries::Queries`，调用其`.global_ctxt().unwrap().enter(|tcx| {...})`方法。
+  2. 对那个闭包中的`tcx`，调用迭代器`.hir().body_owners()`，每次迭代都能获得一个`LocalDefId`。
+  3. 最后使用`LocalDefId::to_def_id()`方法获得`DefId`。
