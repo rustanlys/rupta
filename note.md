@@ -137,7 +137,7 @@ if let Ok(line_and_file) = source_map.span_to_lines(source_loc) {
   //   pub file: Lrc<SourceFile>,
   //   pub lines: Vec<LineInfo>,
   //}
-  现在已经可以得知函数调用发生的位置了。
+  // 现在已经可以得知该语句的位置了。
 }
 ```
 
@@ -150,6 +150,40 @@ if let Ok(line_and_file) = source_map.span_to_lines(source_loc) {
 - 调用发生的位置`loc`来自于`CallVisitor`实例自身的`bv.current_span`，其中`bv`是个`BodyVisitor`。
 - 调用者的位置，即第一个`DefId`来自于`CallVisitor`实例自身的`bv.def_id`。结合MIR的特性很容易明白，实际上MIR中的每个Body就是一个函数。因此`bv.def_id`就是当前正在被分析的函数（即调用者caller）的`DefId`。
 - 被调用者的位置，即第二个`DefId`来自于函数传入的参数。我们可以暂且不管这个东西。
+
+#### 如何获取一个函数的`DefId`？
+
+于是，我们很好奇这个`bv`中的`def_id`是怎么获得的呢？于是跳转到该结构体的定义中一看，原来它的`DefId`是从构造函数中传进来的，不是自己分析获得的。没事，看看谁调用了`BodyVisitor::new`呢？一搜索发现有两处：
+
+- 一处在`CallVisitor::create_and_cache_function_summary`中，如果发现被调用者有MIR表示，就新建一个`BodyVisitor`去分析被调用者的函数调用情况去了。这里`def_id`的来源很明了，就是被调用者的`def_id`。
+- 另一处在`CrateVisitor::analyze_body`中，这儿的`def_id`仍然是外界传进来的，搜索发现这个`analyze_body`方法是在`CrateVisitor::analyze_some_bodies`方法中**计算**获得的，好家伙终于找到源头了！！
+
+我们重点关注后者的`DefId`是怎么计算获得的。我们发现有几处不同的计算`DefId`的方法：
+
+- 通过分析入口函数找到入口函数的`DefId`
+  ```rust
+  // Get the entry function
+  let entry_fn_def_id = if let Some((def_id, _)) = self.tcx.entry_fn(()) {
+      def_id
+  } else {
+      DefId::local(DefIndex::from_u32(0))
+  };
+  ```
+  这儿的`self.tcx`的类型是`TyCtxt<'tcx>`，其来源即为`rustc_driver::Callbacks`中`after_analysis`方法回调函数中，对其传入的参数`queries`经处理后调用`enter`方法时，传递给闭包的第一个参数，也就是说这个`tcx`是编译器给出的一手信息，未经过MIRAI二次处理。
+- 通过遍历HIR的BodyOwners获取各个Body的`DefId`
+  ```rust
+  for local_def_id in self.tcx.hir().body_owners() {
+    let def_id = local_def_id.to_def_id();
+    // -- snip --
+    self.analyze_body(def_id);
+  }
+  ```
+
+至此，我们把如何获得一个函数的`DefId`的方法梳理完成了。总结起来，大致是如下流程：
+
+1. 从回调函数`after_analysis`的参数`rustc_interface::queries::Queries`，调用其`.global_ctxt().unwrap().enter(|tcx| {...})`方法。
+2. 对那个闭包中的`tcx`，调用迭代器`.hir().body_owners()`，每次迭代都能获得一个`LocalDefId`。
+3. 最后使用`LocalDefId::to_def_id()`方法获得`DefId`。
 
 #### 如何获取函数调用发生时的Span信息？
 
@@ -288,36 +322,26 @@ let (block_indices, loop_anchors) = get_sorted_block_indices(body_visitor.mir, d
 
 后边那个函数只是对基本块做了一下拓扑排序而已，本质上`bb`的来源就是`BodyVisitor::mir::basic_blocks`罢了。而`BodyVisitor::mir`的来源，上文已经分析过了。
 
+归总一下，如何获得一条语句的Span信息：
 
-#### 如何获取一个函数的`DefId`？
-
-于是，我们很好奇这个`bv`中的`def_id`是怎么获得的呢？于是跳转到该结构体的定义中一看，原来它的`DefId`是从构造函数中传进来的，不是自己分析获得的。没事，看看谁调用了`BodyVisitor::new`呢？一搜索发现有两处：
-
-- 一处在`CallVisitor::create_and_cache_function_summary`中，如果发现被调用者有MIR表示，就新建一个`BodyVisitor`去分析被调用者的函数调用情况去了。这里`def_id`的来源很明了，就是被调用者的`def_id`。
-- 另一处在`CrateVisitor::analyze_body`中，这儿的`def_id`仍然是外界传进来的，搜索发现这个`analyze_body`方法是在`CrateVisitor::analyze_some_bodies`方法中**计算**获得的，好家伙终于找到源头了！！
-
-我们重点关注后者的`DefId`是怎么计算获得的。我们发现有几处不同的计算`DefId`的方法：
-
-- 通过分析入口函数找到入口函数的`DefId`
+1. 首先获得函数的`DefId`。结合`queries...enter(|tcx| {...})`回调函数给的`tcx`参数，可以获得该函数的MIR，记为`mir`。
+2. 直接从`mir.basic_blocks`获取该函数所包含的全部基本块。
+3. 对每一个基本块`bb`，利用`mir[bb]`获取其包含的语句数组`statements`，并对每个语句`stmt`调用`let mir::Statement { kind, source_info } = statement;`解包获得`source_info`信息。
+4. 最后，利用`source_info.span`获得语句的位置。
+5. 进一步地，可以从Span信息获得源文件路径和在文件中的行号信息。
   ```rust
-  // Get the entry function
-  let entry_fn_def_id = if let Some((def_id, _)) = self.tcx.entry_fn(()) {
-      def_id
-  } else {
-      DefId::local(DefIndex::from_u32(0))
-  };
-  ```
-  这儿的`self.tcx`的类型是`TyCtxt<'tcx>`，其来源即为`rustc_driver::Callbacks`中`after_analysis`方法回调函数中，对其传入的参数`queries`经处理后调用`enter`方法时，传递给闭包的第一个参数，也就是说这个`tcx`是编译器给出的一手信息，未经过MIRAI二次处理。
-- 通过遍历HIR的BodyOwners获取各个Body的`DefId`
-  ```rust
-  for local_def_id in self.tcx.hir().body_owners() {
-    let def_id = local_def_id.to_def_id();
-    // -- snip --
-    self.analyze_body(def_id);
+  // loc的类型就是rustc_span::Span
+  let source_loc = loc.source_callsite();
+  if let Ok(line_and_file) = source_map.span_to_lines(source_loc) {
+    // line_and_file的类型是FileLines
+    // pub struct FileLines {
+    //   pub file: Lrc<SourceFile>,
+    //   pub lines: Vec<LineInfo>,
+    //}
+    // 现在已经可以得知该语句的位置了。
   }
   ```
-  至此，我们把如何获得一个函数的`DefId`的方法梳理完成了。总结起来，大致是如下流程：
 
-  1. 从回调函数`after_analysis`的参数`rustc_interface::queries::Queries`，调用其`.global_ctxt().unwrap().enter(|tcx| {...})`方法。
-  2. 对那个闭包中的`tcx`，调用迭代器`.hir().body_owners()`，每次迭代都能获得一个`LocalDefId`。
-  3. 最后使用`LocalDefId::to_def_id()`方法获得`DefId`。
+### Crate信息从哪里来？
+
+Rupta和MIRAI都没有非常仔细地收集有关Crate的信息，但好在MIRAI有一个`CrateVisitor`，应该对我们收集Crate信息会有帮助。我们的目标是：在浏览所有函数的时候，都得知道这个函数属于具体的哪个Crate，这个Crate的Cargo.toml文件在哪里（以此指代该Crate的路径）。
