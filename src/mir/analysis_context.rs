@@ -113,7 +113,10 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
 
         if let Some(entry_def_id) = entry_fn_def_id {
             let entry_name = tcx.item_name(entry_def_id);
+            // Entry Point: "main", DefId: DefId(0:4 ~ example_crate[6a34]::main)
             info!("Entry Point: {:?}, DefId: {:?}", entry_name, entry_def_id);
+            // tcx.def_path_str = main
+            info!("tcx.def_path_str = {}", tcx.def_path_str(entry_def_id));
             Some(Self {
                 tcx,
                 session,

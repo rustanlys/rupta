@@ -344,4 +344,7 @@ let (block_indices, loop_anchors) = get_sorted_block_indices(body_visitor.mir, d
 
 ### Crate信息从哪里来？
 
-Rupta和MIRAI都没有非常仔细地收集有关Crate的信息，但好在MIRAI有一个`CrateVisitor`，应该对我们收集Crate信息会有帮助。我们的目标是：在浏览所有函数的时候，都得知道这个函数属于具体的哪个Crate，这个Crate的Cargo.toml文件在哪里（以此指代该Crate的路径）。
+Rupta和MIRAI都没有非常仔细地收集有关Crate的信息，MIRAI的`CrateVisitor`也未能提供任何帮助。
+
+我们的目标是：在浏览所有函数的时候，都得知道这个函数属于具体的哪个Crate，这个Crate的Cargo.toml文件在哪里（以此指代该Crate的路径）。
+

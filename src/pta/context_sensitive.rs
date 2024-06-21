@@ -156,7 +156,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     /// Process statements in reachable functions.
     fn process_reach_funcs(&mut self) {
         while let Some(func) = self.rf_iter.next() {
-            println!("{:#?}", func);
+            // println!("{:#?}", func);
             if !self.processed_funcs.contains(&func) {
                 let func_ref = self.acx.get_function_reference(func.func_id);
                 info!(
