@@ -37,6 +37,7 @@ use crate::util::{self, type_util};
 
 use super::substs_specializer::SubstsSpecializer;
 
+/// 和真正的文件系统交互，从源代码文件逐层向上查找直至找到第一个Cargo.toml，以定位该Crate的路径。
 fn get_cargo_toml_path_from_source_file_path_buf(file_path: PathBuf) -> String {
     let mut path = file_path;
     while let Some(parent) = path.parent() {

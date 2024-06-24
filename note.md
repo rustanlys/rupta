@@ -348,3 +348,60 @@ Rupta和MIRAI都没有非常仔细地收集有关Crate的信息，MIRAI的`Crate
 
 我们的目标是：在浏览所有函数的时候，都得知道这个函数属于具体的哪个Crate，这个Crate的Cargo.toml文件在哪里（以此指代该Crate的路径）。
 
+经过搜索，以下代码可以实现这样的功能，它位于`src/builder/fpag_builder.rs`的`FuncPAGBuilder::new`函数中。
+
+```rs
+// 整一份当前上下文的拷贝。
+let cur_tcx = acx.tcx.clone(); // cur_tcx: TyCtxt<'tcx>
+// 获取一些关于当前函数DefId和所属crate的信息
+let def_id_of_func = func_ref.def_id.clone();
+let crate_index_num = def_id_of_func.krate;
+// 有crate的名字，但是没有版本号
+let crate_name = cur_tcx.crate_name(crate_index_num);
+// 当前编译会话里能找到函数所在的文件的信息
+let cur_session = acx.tcx.sess;
+let source_map = cur_session.source_map();
+let span = cur_tcx.def_span(def_id_of_func);
+let file = source_map.lookup_source_file(span.lo());
+// 沃趣，找到了这个函数定义在哪个文件里头！！！！
+let filename = file.name.clone();
+// filename的类型是rustc_span::FileName，它是个枚举。这里极大概率出现的是Real类型。
+// Real类型也是个枚举，在此处最常见的两种Real枚举类型是Remapped和LocalPath。
+// Real(Remapped { local_path: Some("/home/endericedragon/.rustup/toolchains/nightly-2024-02-03-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/range.rs"), virtual_name: "/rustc/bf3c6c5bed498f41ad815641319a1ad9bcecb8e8/library/core/src/ops/range.rs" })
+// Real(LocalPath("/home/endericedragon/playground/example_crate/fastrand-2.1.0/src/lib.rs"))
+// 枚举的其他类型均定义于rustc_span/src/lib.rs
+let file_path = match filename {
+    FileName::Real(real_file_name) => match real_file_name {
+        RealFileName::LocalPath(path_buf) => {
+            get_cargo_toml_path_from_source_file_path_buf(path_buf)
+        }
+        RealFileName::Remapped {
+            local_path: path_buf_optional,
+            virtual_name: _virtual_path_buf, // 我们不关心虚拟路径，直接弃用
+        } => {
+            if let Some(path_buf) = path_buf_optional {
+                get_cargo_toml_path_from_source_file_path_buf(path_buf)
+            } else {
+                String::from("Virtual")
+            }
+        }
+    },
+    _ => String::from("Other"),
+};
+println!("crate_name: {}, crate path: {:?}", crate_name, file_path);
+
+// -- snip --
+/// 和真正的文件系统交互，从源代码文件逐层向上查找直至找到第一个Cargo.toml，以定位该Crate的路径。
+fn get_cargo_toml_path_from_source_file_path_buf(file_path: PathBuf) -> String {
+    let mut path = file_path;
+    while let Some(parent) = path.parent() {
+        if parent.join("Cargo.toml").exists() {
+            return parent.to_path_buf().to_string_lossy().into();
+        }
+        path = parent.to_path_buf();
+    }
+
+    unreachable!()
+}
+```
+
