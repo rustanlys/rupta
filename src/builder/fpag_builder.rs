@@ -120,7 +120,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
             },
             _ => String::from("Other"),
         };
-        println!("crate_name: {}, manifest path: {:?}", crate_name, manifest_path);
+        info!("crate_name: {}, manifest path: {:?}", crate_name, manifest_path);
         //? 折腾结束，您继续
 
         // if func_ref.promoted.is_none() {

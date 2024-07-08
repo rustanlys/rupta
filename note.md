@@ -150,9 +150,9 @@ pub type CallSiteSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'p
 
 我们的总体思路是：
 
-1. crate的信息，可以用`cargo metadata`获取，并且在`src/builder/fpag_builder.rs`中寻找某个函数所属的crate时进行二次验证；
-2. callables的信息，在`src/builder/fpag_builder.rs`中已经收集完全了，只不过需要和上一步crate信息对上
-3. calls中的信息还不知道从哪里来，尚需进一步分析
+1. crate的信息，总体的信息可以用`cargo metadata`获取，某个函数所属的crate也可以用`src/builder/fpag_builder.rs`的`FuncPAGBuilder::new`中的方法查询到。
+2. callables的信息，在`src/builder/fpag_builder.rs`中，也是利用`FuncPAGBuilder::new`中的方法收集完全了，只不过需要和上一步crate信息对上
+3. calls中的信息来源也被解决，来自`src/pta/context_sensitive.rs`中的`ContextSensitivePTA::add_call_edge`函数，它能知晓调用者和被调用者各自的DefId。
 
 ### MIRAI的借鉴
 
@@ -464,4 +464,38 @@ ResultDumperCalls --> ToDot
 
 1. 修改`CallGraphEdge`，使得它能容纳我们想要的信息（caller、callee的唯一标识，并且尽可能直观）
 2. 新增数据结构，记录我们想要的信息（比较麻烦，没必要，不推荐）
+
+然而存在一个问题：函数调用图中，是用FuncId或者CSFuncId指代某个函数的。但是在MIR中，是用DefId指代某个函数。这中间一定存在某种转换关系，即我们想将FuncId转换为DefId。这要怎么做呢？
+
+根据Rupta代码的启示，确认了可以这样做：
+
+```rs
+// 已知acx: AnalysisContext
+let func_ref = acx.get_function_reference(func_id);
+let func_def_id = func_ref.def_id;
+```
+
+利用上述原理，很容易改造`::pta::context_sensitive::ContextSensitivePTA::add_call_edge`为如下的样子：
+
+```rs
+fn add_call_edge(&mut self, callsite: &Rc<CSCallSite>, callee: &CSFuncId) {
+    let caller = callsite.func;
+    if !self.call_graph.add_edge(callsite.into(), caller, *callee) {
+        return;
+    }
+    // 利用acx把FuncId转换为DefId，这样函数的所有信息都能知道
+    let caller_ref = self.acx.get_function_reference(caller.func_id);
+    let caller_def_id = caller_ref.def_id;
+    let callee_ref = self.acx.get_function_reference(callee.func_id);
+    let callee_def_id = callee_ref.def_id;
+    println!("{:?} --> {:?}", caller_def_id, callee_def_id);
+    // 以下部分掌管比较细化的边，例如从实参指向形参的边，
+    // 和从返回值指向存储返回值的变量的有向边，
+    // 我们可以暂时不管。
+    let new_inter_proc_edges = self.pag.add_inter_procedural_edges(self.acx, callsite, *callee);
+    for edge in new_inter_proc_edges {
+        self.inter_proc_edges_queue.push(edge);
+    }
+}
+```
 
