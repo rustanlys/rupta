@@ -42,12 +42,14 @@ fn get_cargo_toml_path_from_source_file_path_buf(file_path: PathBuf) -> String {
     let mut path = file_path;
     while let Some(parent) = path.parent() {
         if parent.join("Cargo.toml").exists() {
-            return parent.to_path_buf().to_string_lossy().into();
+            let result_path_buf = parent.to_path_buf();
+            // result_path_buf.push("Cargo.toml");
+            return result_path_buf.to_string_lossy().into();
         }
         path = parent.to_path_buf();
     }
 
-    unreachable!()
+    panic!("No Cargo.toml found")
 }
 
 /// A visitor that traverses the MIR associated with a particular function's body and
@@ -100,7 +102,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         // Real(LocalPath("/home/endericedragon/playground/example_crate/fastrand-2.1.0/src/lib.rs"))
         // 枚举的完整类型定义于rustc_span/src/lib.rs
         let filename = file.name.clone();
-        let file_path = match filename {
+        let manifest_path = match filename {
             FileName::Real(real_file_name) => match real_file_name {
                 RealFileName::LocalPath(path_buf) => {
                     get_cargo_toml_path_from_source_file_path_buf(path_buf)
@@ -118,7 +120,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
             },
             _ => String::from("Other"),
         };
-        println!("crate_name: {}, crate path: {:?}", crate_name, file_path);
+        println!("crate_name: {}, manifest path: {:?}", crate_name, manifest_path);
         //? 折腾结束，您继续
 
         // if func_ref.promoted.is_none() {

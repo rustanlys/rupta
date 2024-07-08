@@ -122,7 +122,39 @@ pub type CallSiteSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'p
 
 ## 总体修改思路
 
-### 文件路径和`DefId`从哪里来？
+之前，在开题报告中，我们说过我们希望我们的分析工具可以给出如下信息：
+
+```json
+{
+  "crates": [
+    {
+      "crate_name": ...,
+      "manifest_path": ...
+    }, ...
+  ],
+  "callables": [
+    {
+      "belongs_to_crate_idx": ...,
+      "source_file_path": ...,
+      "line_number": ...
+    }, ...
+  ],
+  "calls": [
+    {
+      "caller_idx": ...,
+      "callee_idx": ...
+    }, ...
+  ]
+}
+```
+
+我们的总体思路是：
+
+1. crate的信息，可以用`cargo metadata`获取，并且在`src/builder/fpag_builder.rs`中寻找某个函数所属的crate时进行二次验证；
+2. callables的信息，在`src/builder/fpag_builder.rs`中已经收集完全了，只不过需要和上一步crate信息对上
+3. calls中的信息还不知道从哪里来
+
+### MIRAI的借鉴
 
 由于MIRAI能够输出函数所在的源代码文件路径，而Rupta没有这个机能，所以需要借鉴一下MIRAI是怎么做这件事情的。
 
@@ -405,3 +437,6 @@ fn get_cargo_toml_path_from_source_file_path_buf(file_path: PathBuf) -> String {
 }
 ```
 
+### calls的信息从哪里来？
+
+Rupta和MIRAI都提供了绘制函数调用图的功能，说明他们均有数据结构存储函数调用关系。我们抽丝剥茧，看看具体是怎么实现的。
