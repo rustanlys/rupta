@@ -152,7 +152,7 @@ pub type CallSiteSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'p
 
 1. crate的信息，可以用`cargo metadata`获取，并且在`src/builder/fpag_builder.rs`中寻找某个函数所属的crate时进行二次验证；
 2. callables的信息，在`src/builder/fpag_builder.rs`中已经收集完全了，只不过需要和上一步crate信息对上
-3. calls中的信息还不知道从哪里来
+3. calls中的信息还不知道从哪里来，尚需进一步分析
 
 ### MIRAI的借鉴
 
@@ -440,3 +440,28 @@ fn get_cargo_toml_path_from_source_file_path_buf(file_path: PathBuf) -> String {
 ### calls的信息从哪里来？
 
 Rupta和MIRAI都提供了绘制函数调用图的功能，说明他们均有数据结构存储函数调用关系。我们抽丝剥茧，看看具体是怎么实现的。
+
+首先是输出`.dot`文件的地方。
+
+```mermaid
+graph
+ResultDumperCalls[::util::results_dumper::dump_call_graph]
+ToDot[::graph::call_graph::CallGraph::to_dot]
+
+ResultDumperCalls --> ToDot
+```
+
+通过观察上述函数的源代码，不难发现有个表征函数调用图中“函数调用关系”的结构体`CallGraphEdge`，而函数调用图的边恰好就是用来体现函数之间调用关系的！
+
+继续阅读，发现这个`CallGraphEdge`是对任意实现了`::graph::call_graph::CGCallsite` trait的类型的简单包装。不过这不是最重要的，最重要的是我们发现了两个方法，这两个方法对于在调用图中增加一条边是有用的，即定义在`CallGraph`上的：
+
+- `pub fn get_callees(&self, callsite: &S) -> HashSet<F>`方法
+- `pub fn add_edge(&mut self, callsite: S, caller_id: F, callee_id: F) -> bool`方法。
+
+这儿的泛型参数详细为：`F: CGFunction`、`S: CGCallSite`。
+
+其中，后者真正进行了边的创建、边编号`EdgeIdx`的申请和更新调用图中的信息等事务。根据后者的调用情况，我们可以给出结论：这些调用边并非在全部计算完成之后再加入调用图，而是一边计算一边加入调用图的。因此，想要知道函数的调用信息，有两个做法：
+
+1. 修改`CallGraphEdge`，使得它能容纳我们想要的信息（caller、callee的唯一标识，并且尽可能直观）
+2. 新增数据结构，记录我们想要的信息（比较麻烦，没必要，不推荐）
+

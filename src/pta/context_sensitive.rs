@@ -315,6 +315,9 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         if !self.call_graph.add_edge(callsite.into(), caller, *callee) {
             return;
         }
+        // 以下部分掌管比较细化的边，例如从实参指向形参的边，
+        // 和从返回值指向存储返回值的变量的有向边，
+        // 我们可以暂时不管。
         let new_inter_proc_edges = self.pag.add_inter_procedural_edges(self.acx, callsite, *callee);
         for edge in new_inter_proc_edges {
             self.inter_proc_edges_queue.push(edge);
