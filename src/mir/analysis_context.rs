@@ -15,14 +15,15 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+use crate::info_collector::FuncMetadata;
+use crate::mir::call_site::{BaseCallSite, CalleeIdentifier};
 use crate::mir::function::{FuncId, FunctionReference, GenericArgE};
 use crate::mir::known_names::{KnownNames, KnownNamesCache};
 use crate::mir::path::Path;
+use crate::mir::path::{PathEnum, ProjectionElems};
 use crate::util;
 use crate::util::options::AnalysisOptions;
-use crate::util::type_util::{self, FieldByteOffsetCache, TypeCache, PointerProjectionsCache, PathCastCache};
-use crate::mir::call_site::{BaseCallSite, CalleeIdentifier};
-use crate::mir::path::{PathEnum, ProjectionElems};
+use crate::util::type_util::{self, FieldByteOffsetCache, PathCastCache, PointerProjectionsCache, TypeCache};
 
 /// Global information of the analysis
 pub struct AnalysisContext<'tcx, 'compilation> {
@@ -71,6 +72,8 @@ pub struct AnalysisContext<'tcx, 'compilation> {
     pub(crate) aux_local_indexer: HashMap<FuncId, usize>,
 
     pub known_names_cache: KnownNamesCache,
+
+    pub func_metadatas: HashSet<FuncMetadata>,
 }
 
 impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
@@ -136,6 +139,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
                 aux_local_indexer: HashMap::new(),
                 concretized_heap_objs: HashMap::new(),
                 known_names_cache: KnownNamesCache::create_cache_from_language_items(),
+                func_metadatas: HashSet::new(),
             })
         } else {
             error!("Entry point not found");
@@ -201,10 +205,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
     pub fn cast_to(&mut self, path: &Rc<Path>, ty: Ty<'tcx>) -> Option<Rc<Path>> {
         let mut path_cast_cache = std::mem::take(&mut self.path_cast_cache);
         let res = path_cast_cache.cast_to(self, path, ty);
-        std::mem::swap(
-            &mut self.path_cast_cache,
-            &mut path_cast_cache,
-        );
+        std::mem::swap(&mut self.path_cast_cache, &mut path_cast_cache);
         res
     }
 
@@ -212,10 +213,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
     pub fn get_type_variant(&mut self, path: &Rc<Path>, ty: Ty<'tcx>) -> Option<Rc<Path>> {
         let mut path_cast_cache = std::mem::take(&mut self.path_cast_cache);
         let res = path_cast_cache.get_type_variant(self, path, ty);
-        std::mem::swap(
-            &mut self.path_cast_cache,
-            &mut path_cast_cache,
-        );
+        std::mem::swap(&mut self.path_cast_cache, &mut path_cast_cache);
         res
     }
 
@@ -274,7 +272,12 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         self.get_or_add_function_reference(func_ref)
     }
 
-    pub fn add_dyn_callsite(&mut self, callsite: BaseCallSite, callee_id: DefId, gen_args: GenericArgsRef<'tcx>) {
+    pub fn add_dyn_callsite(
+        &mut self,
+        callsite: BaseCallSite,
+        callee_id: DefId,
+        gen_args: GenericArgsRef<'tcx>,
+    ) {
         self.dyn_callsite_cache.insert(callsite, (callee_id, gen_args));
     }
 
@@ -328,6 +331,4 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         self.aux_local_indexer.insert(func_id, aux_local_index + 1);
         aux
     }
-
 }
-

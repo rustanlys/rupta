@@ -8,10 +8,10 @@
 //! The Function PAG is part of the PAG for the whole program.
 
 use log::*;
+use rustc_span::sym::assert_eq;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Result};
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use rustc_hir::def::DefKind;
@@ -29,6 +29,9 @@ use rustc_target::abi::FieldIdx;
 use crate::builder::{call_graph_builder, special_function_handler};
 use crate::graph::func_pag::FuncPAG;
 use crate::graph::pag::PAGEdgeEnum;
+use crate::info_collector::{
+    fix_incorrect_local_path, get_cargo_toml_path_from_source_file_path_buf, CrateMetadata, FuncMetadata,
+};
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::call_site::CallSite;
 use crate::mir::function::{FuncId, FunctionReference};
@@ -36,21 +39,6 @@ use crate::mir::path::{Path, PathEnum, PathSelector, PathSupport, ProjectionElem
 use crate::util::{self, type_util};
 
 use super::substs_specializer::SubstsSpecializer;
-
-/// 和真正的文件系统交互，从源代码文件逐层向上查找直至找到第一个Cargo.toml，以定位该Crate的路径。
-fn get_cargo_toml_path_from_source_file_path_buf(file_path: PathBuf) -> String {
-    let mut path = file_path;
-    while let Some(parent) = path.parent() {
-        if parent.join("Cargo.toml").exists() {
-            let result_path_buf = parent.to_path_buf();
-            // result_path_buf.push("Cargo.toml");
-            return result_path_buf.to_string_lossy().into();
-        }
-        path = parent.to_path_buf();
-    }
-
-    panic!("No Cargo.toml found")
-}
 
 /// A visitor that traverses the MIR associated with a particular function's body and
 /// build the function's pointer assignment graph.
@@ -89,38 +77,70 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         let cur_tcx = acx.tcx.clone();
         // 获取一些关于当前函数DefId和所属crate的信息
         let def_id_of_func = func_ref.def_id.clone();
-        let crate_index_num = def_id_of_func.krate;
+        // let crate_index_num = def_id_of_func.krate;
         // 有crate的名字，但是没有版本号
-        let crate_name = cur_tcx.crate_name(crate_index_num);
+        // let crate_name = cur_tcx.crate_name(crate_index_num);
         // 让我看看当前编译会话里能榨出点啥
         let cur_session = acx.tcx.sess;
         let source_map = cur_session.source_map();
         let span = cur_tcx.def_span(def_id_of_func);
         let file = source_map.lookup_source_file(span.lo());
+        let line_num = if let Ok(file_and_line) = source_map.lookup_line(span.lo()) {
+            // assert_eq!(file_and_line.sf.name, file.name);
+            file_and_line.line
+        } else {
+            0
+        };
+
         // 沃趣，找到了这个函数定义在哪个文件里头！！！！
         // Real(Remapped { local_path: Some("/home/endericedragon/.rustup/toolchains/nightly-2024-02-03-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/range.rs"), virtual_name: "/rustc/bf3c6c5bed498f41ad815641319a1ad9bcecb8e8/library/core/src/ops/range.rs" })
         // Real(LocalPath("/home/endericedragon/playground/example_crate/fastrand-2.1.0/src/lib.rs"))
         // 枚举的完整类型定义于rustc_span/src/lib.rs
         let filename = file.name.clone();
-        let manifest_path = match filename {
+        let filename_cloned = filename.clone();
+        let source_file_path = match filename {
             FileName::Real(real_file_name) => match real_file_name {
-                RealFileName::LocalPath(path_buf) => {
-                    get_cargo_toml_path_from_source_file_path_buf(path_buf)
-                }
+                RealFileName::LocalPath(path_buf) => Ok(fix_incorrect_local_path(path_buf)),
                 RealFileName::Remapped {
                     local_path: path_buf_optional,
-                    virtual_name: _virtual_path_buf,
+                    virtual_name: virtual_path_buf,
                 } => {
                     if let Some(path_buf) = path_buf_optional {
-                        get_cargo_toml_path_from_source_file_path_buf(path_buf)
+                        Ok(fix_incorrect_local_path(path_buf))
                     } else {
-                        String::from("Virtual")
+                        Err(format!("Virtual: {}", virtual_path_buf.to_string_lossy()))
                     }
                 }
             },
-            _ => String::from("Other"),
+            _ => Err(format!("Other: {:?}", filename_cloned)),
         };
-        info!("crate_name: {}, manifest path: {:?}", crate_name, manifest_path);
+
+        let manifest_path = match &source_file_path {
+            Ok(path_buf) => get_cargo_toml_path_from_source_file_path_buf(&path_buf),
+            Err(message) => Err(message.to_owned()),
+        };
+
+        let func_metadata = FuncMetadata::new(
+            def_id_of_func,
+            match source_file_path {
+                Ok(path_buf) => Some(path_buf),
+                _ => None,
+            },
+            line_num,
+            match manifest_path {
+                Ok(path) => {
+                    let crate_metadata = CrateMetadata::new(&path);
+                    Some(crate_metadata)
+                }
+
+                Err(message) => {
+                    eprintln!("Error: {}", message);
+                    None
+                }
+            },
+        );
+
+        acx.func_metadatas.insert(func_metadata);
         //? 折腾结束，您继续
 
         // if func_ref.promoted.is_none() {

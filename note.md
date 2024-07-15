@@ -499,3 +499,65 @@ fn add_call_edge(&mut self, callsite: &Rc<CSCallSite>, callee: &CSFuncId) {
 }
 ```
 
+### 如何输出信息到文件？
+
+先回顾一下我们需要的信息，以及它们分别分布在什么地方。
+
+1. crate的信息，总体的信息可以用`cargo metadata`获取，某个函数所属的crate也可以用`src/builder/fpag_builder.rs`的`FuncPAGBuilder::new`中的方法查询到。
+2. callables的信息，在`src/builder/fpag_builder.rs`中，也是利用`FuncPAGBuilder::new`中的方法收集完全了，只不过需要和上一步crate信息对上
+3. calls中的信息来源也被解决，来自`src/pta/context_sensitive.rs`中的`ContextSensitivePTA::add_call_edge`函数，它能知晓调用者和被调用者各自的DefId。
+
+#### Rupta自己是如何输出信息的？
+
+Rupta输出信息的总出口位于`src/util/results_dumper.rs`的`dump_result`函数中，函数签名如下：
+
+```rs
+pub fn dump_results<P: PAGPath, F, S>(
+    acx: &AnalysisContext,
+    call_graph: &CallGraph<F, S>,
+    pt_data: &DiffPTDataTy,
+    pag: &PAG<P>,
+) where
+    F: CGFunction + Into<FuncId>,
+    S: CGCallSite + Into<BaseCallSite>,
+    <P as PAGPath>::FuncTy: Ord + std::fmt::Debug + Into<FuncId> + Copy
+{
+    // --snip --
+}
+```
+
+其函数签名中的`acx`很难不引起注意，它的类型是`AnalysisContext`，内含许多分析工作所必须的数据结构（例如`TyCtxt`）。它还存储了分析结果输出的路径，例如其中的：
+
+```rs
+if let Some(pts_output) = &acx.analysis_options.pts_output {
+    info!("Dumping points-to results...");
+    dump_ci_pts(acx, pt_data, pag, pts_output);
+    // dump_pts(pt_data, pag, pts_output);
+}
+```
+
+很显然，`pts_output`就是运行rupta时传入的命令行参数中，指定的PTS输出路径。同时，函数还接收了一大堆参数（`call_graph, pt_data`）等。这些才是真正输出到调用图中去的信息。它们是谁给的呢？原来是`ContextSensitivePTA`：
+
+```rs
+impl<...> ContextSensitivePTA<...> {
+    pub fn finalize(&self) {
+        // dump call graph, points-to results
+        results_dumper::dump_results(self.acx, &self.call_graph, &self.pt_data, &self.pag);
+
+        // dump pta statistics
+        let pta_stat = ContextSensitiveStat::new(self);
+        pta_stat.dump_stats();
+    }
+}
+```
+
+很显然，是在分析过程中，`ContextSensitivePTA`把分析结果存储于自身，然后在结束分析时调用了`dump_results`进行分析结果的存储的。
+
+那么，为了输出函数调用信息和所属`crate`信息，可以将上述信息直接放进`AnalysisContext`中。由于Rupta的几乎每个分析有关的函数都会以一个`AnalysisContext`作为第一个参数，因此在这里存储结果是相对容易实现的。
+
+于是，增添rupta的代码，最终改动情况如下：
+
+1. 新建了`info_collector`，在其中定义了`CrateMetadata`和`FuncMetadata`两个结构体，前者唯一标识一个`crate`，后者唯一标识一个函数。
+2. 在`AnalysisContext`中新增了一个`func_metadatas: HashSet<FuncMetadata>`字段，存储`FuncPAGBuilder`计算获得的所有`FuncMetadata`。
+
+下一步想做的事情有两条：首先是将`func_metadatas`输出出来，其次是优化其结构，因为很多函数同属于一个`crate`，但现在的存储结构会导致一个`crate`的`metadata`被存储好几遍导致内存占用过高。`Rupta`本身的内存占用已经很吓人了，再用这么劣质的存储结构只会雪上加霜。

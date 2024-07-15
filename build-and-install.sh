@@ -1,0 +1,1 @@
+cargo --locked install --path .

@@ -231,11 +231,11 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
             let empty_cid = self.special_callsite_context(&cs_callsite, callee);
             let cs_callee = self.mk_cs_func(*callee, empty_cid);
             self.call_graph.add_edge(cs_callsite.into(), func, cs_callee);
-            let caller_ref = self.acx.get_function_reference(func.func_id);
-            let caller_def_id = caller_ref.def_id;
-            let callee_ref = self.acx.get_function_reference(*callee);
-            let callee_def_id = callee_ref.def_id;
-            println!("{:?} --> {:?}", caller_def_id, callee_def_id);
+            // let caller_ref = self.acx.get_function_reference(func.func_id);
+            // let caller_def_id = caller_ref.def_id;
+            // let callee_ref = self.acx.get_function_reference(*callee);
+            // let callee_def_id = callee_ref.def_id;
+            // println!("{:?} --> {:?}", caller_def_id, callee_def_id);
             // This may classify some special dynamic calls into static calls
             self.call_graph
                 .set_callsite_type(callsite.into(), CallType::StaticDispatch);
@@ -344,7 +344,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         let caller_def_id = caller_ref.def_id;
         let callee_ref = self.acx.get_function_reference(callee.func_id);
         let callee_def_id = callee_ref.def_id;
-        println!("{:?} --> {:?}", caller_def_id, callee_def_id);
+        // println!("{:?} --> {:?}", caller_def_id, callee_def_id);
         // 以下部分掌管比较细化的边，例如从实参指向形参的边，
         // 和从返回值指向存储返回值的变量的有向边，
         // 我们可以暂时不管。

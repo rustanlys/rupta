@@ -8,6 +8,7 @@ use petgraph::visit::EdgeRef;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::graph::pag::{PAGNodeId, PAG, PAGPath};
@@ -23,10 +24,10 @@ use crate::pts_set::points_to::PointsToSet;
 use crate::util;
 
 pub fn dump_results<P: PAGPath, F, S>(
-    acx: &AnalysisContext, 
-    call_graph: &CallGraph<F, S>, 
-    pt_data: &DiffPTDataTy, 
-    pag: &PAG<P>, 
+    acx: &AnalysisContext,
+    call_graph: &CallGraph<F, S>,
+    pt_data: &DiffPTDataTy,
+    pag: &PAG<P>,
 ) where
     F: CGFunction + Into<FuncId>,
     S: CGCallSite + Into<BaseCallSite>,
@@ -44,6 +45,16 @@ pub fn dump_results<P: PAGPath, F, S>(
         let cg_path = std::path::Path::new(cg_output);
         info!("Dumping call graph...");
         dump_call_graph(acx, call_graph, cg_path);
+
+        // 因为尚未修改命令行参数，因此只好先暂且把输出函数元数据的部分硬编码在这里了
+        let mut fm_path_buf = PathBuf::from(cg_output);
+        fm_path_buf.pop();
+        fm_path_buf.push("func_metadata.json");
+        info!("Dumping function metadatas...");
+        let fm_data = &acx.func_metadatas;
+        let fm_file = File::create(fm_path_buf.as_path()).expect("Unable to create func_metadata file");
+        let v = fm_data.iter().collect::<Vec<_>>();
+        serde_json::to_writer(fm_file,&v).expect("Unable to write func_metadata file");
     }
 
     // dump mir for reachable functions
@@ -69,10 +80,10 @@ pub fn dump_results<P: PAGPath, F, S>(
 
 
 pub fn dump_call_graph<F, S>(
-    acx: &AnalysisContext, 
-    call_graph: &CallGraph<F, S>, 
+    acx: &AnalysisContext,
+    call_graph: &CallGraph<F, S>,
     dot_path: &std::path::Path
-) where 
+) where
     F: CGFunction + Into<FuncId>,
     S: CGCallSite + Into<BaseCallSite>,
 {
@@ -173,8 +184,8 @@ pub fn dump_ci_pts<P: PAGPath>(acx: &AnalysisContext, pt_data: &DiffPTDataTy, pa
 }
 
 pub fn dump_mir<F: CGFunction + Into<FuncId>, S: CGCallSite>(
-    acx: &AnalysisContext, 
-    call_graph: &CallGraph<F, S>, 
+    acx: &AnalysisContext,
+    call_graph: &CallGraph<F, S>,
     mir_path: &String
 ) {
     // let mut mir_writer = Box::new(File::create(mir_path).expect("Unable to create file")) as Box<dyn Write>;
@@ -204,8 +215,8 @@ pub fn dump_mir<F: CGFunction + Into<FuncId>, S: CGCallSite>(
 }
 
 pub fn dump_dyn_calls<F: CGFunction, S: CGCallSite>(
-    acx: &AnalysisContext, 
-    call_graph: &CallGraph<F, S>, 
+    acx: &AnalysisContext,
+    call_graph: &CallGraph<F, S>,
     dyn_calls_path: &String
 ) where
     F: Into<FuncId>,
@@ -337,7 +348,7 @@ pub fn dump_func_contexts(acx: &AnalysisContext, call_graph: &CSCallGraph, ctx_s
     for cs_func in call_graph.reach_funcs_iter() {
         func_ctxts_map.entry(cs_func.func_id).or_default().insert(cs_func.cid);
     }
-    
+
     // Sort and print the func_ctxts_map
     let mut sorted_func_ctxts: Vec<(&FuncId, &HashSet<ContextId>)> = func_ctxts_map.iter().collect();
     sorted_func_ctxts.sort_by(|a, b| a.1.len().cmp(&b.1.len()));
@@ -390,28 +401,28 @@ pub fn dump_most_called_funcs<W: Write>(acx: &AnalysisContext, call_graph: &Call
 
 fn path_func_id(value: &PathEnum) -> Option<FuncId> {
     match value {
-        PathEnum::LocalVariable { func_id, .. } 
-        | PathEnum::Parameter { func_id, .. } 
-        | PathEnum::ReturnValue { func_id } 
-        | PathEnum::Auxiliary { func_id, .. } 
+        PathEnum::LocalVariable { func_id, .. }
+        | PathEnum::Parameter { func_id, .. }
+        | PathEnum::ReturnValue { func_id }
+        | PathEnum::Auxiliary { func_id, .. }
         | PathEnum::HeapObj { func_id, .. } => Some(*func_id),
-        PathEnum::Constant 
-        | PathEnum::StaticVariable { .. } 
+        PathEnum::Constant
+        | PathEnum::StaticVariable { .. }
         | PathEnum::PromotedConstant { .. } => {
             None
         }
-        PathEnum::QualifiedPath { base, .. } 
+        PathEnum::QualifiedPath { base, .. }
         | PathEnum::OffsetPath { base, .. } => path_func_id(&base.value),
-        PathEnum::Function(..) 
-        | PathEnum::PromotedArgumentV1Array 
-        | PathEnum::PromotedStrRefArray 
+        PathEnum::Function(..)
+        | PathEnum::PromotedArgumentV1Array
+        | PathEnum::PromotedStrRefArray
         | PathEnum::Type(..) => None,
     }
 }
 
 fn to_ci_call_graph<F, S>(
-    call_graph: &CallGraph<F, S>, 
-) -> CallGraph<FuncId, BaseCallSite> where 
+    call_graph: &CallGraph<F, S>,
+) -> CallGraph<FuncId, BaseCallSite> where
     F: CGFunction + Into<FuncId>,
     S: CGCallSite + Into<BaseCallSite>,
 {
