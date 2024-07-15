@@ -559,5 +559,9 @@ impl<...> ContextSensitivePTA<...> {
 
 1. 新建了`info_collector`，在其中定义了`CrateMetadata`和`FuncMetadata`两个结构体，前者唯一标识一个`crate`，后者唯一标识一个函数。
 2. 在`AnalysisContext`中新增了一个`func_metadatas: HashSet<FuncMetadata>`字段，存储`FuncPAGBuilder`计算获得的所有`FuncMetadata`。
+3. `FuncPAGBuilder::new`中计算获得构造`FuncMetadata`所需的所有信息，构造后者并加入`AnalysisContext.func_metadatas`中。
+4. `src/info_collector/mod.rs`中，用`serde`给`FuncMetadata`等结构体实现了了`Serialize` trait。
+5. `src/util/results_dumper.rs`的`dump_results`函数中，增加了输出`func_metadatas`的语句。
 
-下一步想做的事情有两条：首先是将`func_metadatas`输出出来，其次是优化其结构，因为很多函数同属于一个`crate`，但现在的存储结构会导致一个`crate`的`metadata`被存储好几遍导致内存占用过高。`Rupta`本身的内存占用已经很吓人了，再用这么劣质的存储结构只会雪上加霜。
+
+下一步想做的事情：优化存储结构，因为很多函数同属于一个`crate`，但现在的存储结构会导致一个`crate`的`metadata`被存储好几遍导致内存占用过高。`Rupta`本身的内存占用已经很吓人了，再用这么劣质的存储结构只会雪上加霜。

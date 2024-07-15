@@ -8,7 +8,6 @@
 //! The Function PAG is part of the PAG for the whole program.
 
 use log::*;
-use rustc_span::sym::assert_eq;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Result};

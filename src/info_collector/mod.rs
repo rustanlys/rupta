@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use cargo_metadata::{Metadata, MetadataCommand, PackageId};
 use serde::{ser::SerializeStruct, Serialize};
-use serde_json;
 
 /// 针对rustlib/src/rust/compiler中的crate进行特别修复，将其中错误的路径替换成正确的
 pub fn fix_incorrect_local_path(incorrect_path_buf: PathBuf) -> PathBuf {
