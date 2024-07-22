@@ -499,6 +499,8 @@ fn add_call_edge(&mut self, callsite: &Rc<CSCallSite>, callee: &CSFuncId) {
 }
 ```
 
+函数的调用双方在`add_call_edge`方法中全都知道了。但是函数调用发生在哪个文件的第几行中呢？
+
 ### 如何输出信息到文件？
 
 先回顾一下我们需要的信息，以及它们分别分布在什么地方。

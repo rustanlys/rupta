@@ -345,6 +345,31 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         let callee_ref = self.acx.get_function_reference(callee.func_id);
         let callee_def_id = callee_ref.def_id;
         // println!("{:?} --> {:?}", caller_def_id, callee_def_id);
+
+        // callsite.location里有什么？
+        // rustc_middle::mir::Location是
+        let call_location = callsite.location;
+        let caller_mir = self.acx.tcx.optimized_mir(caller_def_id);
+        let call_span = caller_mir.source_info(call_location).span;
+        let source_map = self.acx.tcx.sess.source_map();
+        match source_map.lookup_line(call_span.lo()) {
+            Ok(source_and_line) => {
+                let source_file = source_and_line.sf;
+                // 别忘记，这儿的行号和列号全是从0开始的
+                let line_number = 1 + source_and_line.line;
+                println!(
+                    "Callsite: {:?} calls {:?} at {:?} line {}",
+                    caller_ref.to_string(),
+                    callee_ref.to_string(),
+                    source_file.name,
+                    line_number
+                );
+            }
+            Err(_) => {}
+        }
+
+        // self.
+
         // 以下部分掌管比较细化的边，例如从实参指向形参的边，
         // 和从返回值指向存储返回值的变量的有向边，
         // 我们可以暂时不管。
