@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
 use cargo_metadata::{Metadata, MetadataCommand, PackageId};
+use rustc_span::{FileName, RealFileName};
 use serde::{ser::SerializeStruct, Serialize};
 
 /// 针对rustlib/src/rust/compiler中的crate进行特别修复，将其中错误的路径替换成正确的
-pub fn fix_incorrect_local_path(incorrect_path_buf: PathBuf) -> PathBuf {
+pub fn fix_incorrect_local_path(incorrect_path_buf: &PathBuf) -> PathBuf {
     // 特殊处理rustc_*，它们的源代码位置和Span给出的不一样，需要进行替换
     // replace rustlib/src/rust/compiler with rustlib/rustc-src/rust/compiler
     let file_path_string = incorrect_path_buf.to_string_lossy();
@@ -33,6 +34,25 @@ pub fn get_cargo_toml_path_from_source_file_path_buf(
         "No Cargo.toml found: {}",
         original_path.to_string_lossy()
     ))
+}
+
+pub fn get_pathbuf_from_filename_struct(filename: FileName) -> core::result::Result<PathBuf, String> {
+    match &filename {
+        FileName::Real(real_file_name) => match real_file_name {
+            RealFileName::LocalPath(path_buf) => Ok(fix_incorrect_local_path(path_buf)),
+            RealFileName::Remapped {
+                local_path: path_buf_optional,
+                virtual_name: virtual_path_buf,
+            } => {
+                if let Some(path_buf) = path_buf_optional {
+                    Ok(fix_incorrect_local_path(path_buf))
+                } else {
+                    Err(format!("Virtual: {}", virtual_path_buf.to_string_lossy()))
+                }
+            }
+        },
+        _ => Err(format!("Other: {:?}", filename)),
+    }
 }
 
 #[derive(Debug, Clone)]

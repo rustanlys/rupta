@@ -347,7 +347,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         // println!("{:?} --> {:?}", caller_def_id, callee_def_id);
 
         // callsite.location里有什么？
-        // rustc_middle::mir::Location是
+        // rustc_middle::mir::Location可配合tcx找到span
         let call_location = callsite.location;
         let caller_mir = self.acx.tcx.optimized_mir(caller_def_id);
         let call_span = caller_mir.source_info(call_location).span;
@@ -365,7 +365,14 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                     line_number
                 );
             }
-            Err(_) => {}
+            Err(source_file_only) => {
+                println!(
+                    "Callsite: {:?} calls {:?} at {:?} line UNKNOWN",
+                    caller_ref.to_string(),
+                    callee_ref.to_string(),
+                    source_file_only.name
+                );
+            }
         }
 
         // self.

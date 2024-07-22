@@ -501,6 +501,38 @@ fn add_call_edge(&mut self, callsite: &Rc<CSCallSite>, callee: &CSFuncId) {
 
 函数的调用双方在`add_call_edge`方法中全都知道了。但是函数调用发生在哪个文件的第几行中呢？
 
+首先，注意到`add_call_edge`函数中传入的参数`callsite: &Rc<CSCallSite>`，其内有一个字段`location: rustc_middle::mir::Location`，看名字应该是能知道这个call site的具体位置的。但是，如何利用这个信息进行查找呢？
+
+根据搜索结果，办法如下：
+
+```rs
+// 这就是callsite参数的location字段
+let call_location = callsite.location;
+// 由于函数调用一定是发生在caller里，因此
+// 需要获得caller的mir
+let caller_mir = self.acx.tcx.optimized_mir(caller_def_id);
+// 利用mir获得callsite的位置
+let call_span = caller_mir.source_info(call_location).span;
+// 为获得行号信息，需要一个source_map
+let source_map = self.acx.tcx.sess.source_map();
+// match一下两种情况，Ok就是又有文件路径又有行号，Err就是只有文件路径（估计还是虚拟路径）
+match source_map.lookup_line(call_span.lo()) {
+    Ok(source_and_line) => {
+        let source_file = source_and_line.sf;
+        // 别忘记，这儿的行号和列号全是从0开始的
+        let line_number = 1 + source_and_line.line;
+        println!(
+            "Callsite: {:?} calls {:?} at {:?} line {}",
+            caller_ref.to_string(),
+            callee_ref.to_string(),
+            source_file.name,
+            line_number
+        );
+    }
+    Err(_) => ()
+}
+```
+
 ### 如何输出信息到文件？
 
 先回顾一下我们需要的信息，以及它们分别分布在什么地方。
@@ -557,13 +589,16 @@ impl<...> ContextSensitivePTA<...> {
 
 那么，为了输出函数调用信息和所属`crate`信息，可以将上述信息直接放进`AnalysisContext`中。由于Rupta的几乎每个分析有关的函数都会以一个`AnalysisContext`作为第一个参数，因此在这里存储结果是相对容易实现的。
 
+#### 将函数及其所属crate信息输出到文件
+
 于是，增添rupta的代码，最终改动情况如下：
 
-1. 新建了`info_collector`，在其中定义了`CrateMetadata`和`FuncMetadata`两个结构体，前者唯一标识一个`crate`，后者唯一标识一个函数。
+1. 新建了模块`info_collector`，在其中定义了`CrateMetadata`和`FuncMetadata`两个结构体，前者唯一标识一个`crate`，后者唯一标识一个函数。
 2. 在`AnalysisContext`中新增了一个`func_metadatas: HashSet<FuncMetadata>`字段，存储`FuncPAGBuilder`计算获得的所有`FuncMetadata`。
 3. `FuncPAGBuilder::new`中计算获得构造`FuncMetadata`所需的所有信息，构造后者并加入`AnalysisContext.func_metadatas`中。
 4. `src/info_collector/mod.rs`中，用`serde`给`FuncMetadata`等结构体实现了了`Serialize` trait。
 5. `src/util/results_dumper.rs`的`dump_results`函数中，增加了输出`func_metadatas`的语句。
 
+#### 将函数的调用情况输出到文件
 
 下一步想做的事情：优化存储结构，因为很多函数同属于一个`crate`，但现在的存储结构会导致一个`crate`的`metadata`被存储好几遍导致内存占用过高。`Rupta`本身的内存占用已经很吓人了，再用这么劣质的存储结构只会雪上加霜。

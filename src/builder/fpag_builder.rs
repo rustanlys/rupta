@@ -22,14 +22,14 @@ use rustc_middle::ty;
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::{Const, GenericArgsRef, Ty, TyCtxt, TyKind};
 use rustc_span::source_map::Spanned;
-use rustc_span::{FileName, RealFileName};
 use rustc_target::abi::FieldIdx;
 
 use crate::builder::{call_graph_builder, special_function_handler};
 use crate::graph::func_pag::FuncPAG;
 use crate::graph::pag::PAGEdgeEnum;
 use crate::info_collector::{
-    fix_incorrect_local_path, get_cargo_toml_path_from_source_file_path_buf, CrateMetadata, FuncMetadata,
+    get_cargo_toml_path_from_source_file_path_buf,
+    get_pathbuf_from_filename_struct, CrateMetadata, FuncMetadata,
 };
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::call_site::CallSite;
@@ -96,23 +96,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         // Real(LocalPath("/home/endericedragon/playground/example_crate/fastrand-2.1.0/src/lib.rs"))
         // 枚举的完整类型定义于rustc_span/src/lib.rs
         let filename = file.name.clone();
-        let filename_cloned = filename.clone();
-        let source_file_path = match filename {
-            FileName::Real(real_file_name) => match real_file_name {
-                RealFileName::LocalPath(path_buf) => Ok(fix_incorrect_local_path(path_buf)),
-                RealFileName::Remapped {
-                    local_path: path_buf_optional,
-                    virtual_name: virtual_path_buf,
-                } => {
-                    if let Some(path_buf) = path_buf_optional {
-                        Ok(fix_incorrect_local_path(path_buf))
-                    } else {
-                        Err(format!("Virtual: {}", virtual_path_buf.to_string_lossy()))
-                    }
-                }
-            },
-            _ => Err(format!("Other: {:?}", filename_cloned)),
-        };
+        let source_file_path = get_pathbuf_from_filename_struct(filename);
 
         let manifest_path = match &source_file_path {
             Ok(path_buf) => get_cargo_toml_path_from_source_file_path_buf(&path_buf),
