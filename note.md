@@ -594,11 +594,20 @@ impl<...> ContextSensitivePTA<...> {
 于是，增添rupta的代码，最终改动情况如下：
 
 1. 新建了模块`info_collector`，在其中定义了`CrateMetadata`和`FuncMetadata`两个结构体，前者唯一标识一个`crate`，后者唯一标识一个函数。
-2. 在`AnalysisContext`中新增了一个`func_metadatas: HashSet<FuncMetadata>`字段，存储`FuncPAGBuilder`计算获得的所有`FuncMetadata`。
-3. `FuncPAGBuilder::new`中计算获得构造`FuncMetadata`所需的所有信息，构造后者并加入`AnalysisContext.func_metadatas`中。
+2. 在`AnalysisContext`中新增了一个`func_metadata: HashSet<FuncMetadata>`字段，存储`FuncPAGBuilder`计算获得的所有`FuncMetadata`。
+3. `FuncPAGBuilder::new`中计算获得构造`FuncMetadata`所需的所有信息，构造后者并加入`AnalysisContext.func_metadata`中。
 4. `src/info_collector/mod.rs`中，用`serde`给`FuncMetadata`等结构体实现了了`Serialize` trait。
-5. `src/util/results_dumper.rs`的`dump_results`函数中，增加了输出`func_metadatas`的语句。
+5. `src/util/results_dumper.rs`的`dump_results`函数中，增加了输出`func_metadata`的语句。
 
 #### 将函数的调用情况输出到文件
+
+和输出函数信息类似，如法炮制：
+
+1. 在`info_collector`中定义`CallSiteMetadata`结构体，包含调用者和被调用者的DefId，以及调用发生所在的文件在文件系统中的路径、文件中的具体行号。同时为它实现`std::hash::Hash` trait和serde的`Serialize` trait。
+2. 在`AnalysisContext`中新增了一个`callsite_metadata: HashSet<CallSiteMetadata>`。
+3. `rupta::pta::context_sensitive::ContextSensitivePTA::add_call_edge`计算获得一次函数调用的具体信息，并以此构造`CallSiteMetadata`，加入`acx`中。
+4. 在`result_dumpers`中输出这些信息。
+
+#### TODO
 
 下一步想做的事情：优化存储结构，因为很多函数同属于一个`crate`，但现在的存储结构会导致一个`crate`的`metadata`被存储好几遍导致内存占用过高。`Rupta`本身的内存占用已经很吓人了，再用这么劣质的存储结构只会雪上加霜。
