@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{hash::Hash, path::PathBuf};
 
 use cargo_metadata::{Metadata, MetadataCommand, PackageId};
 use rustc_span::{FileName, RealFileName};
@@ -36,8 +36,10 @@ pub fn get_cargo_toml_path_from_source_file_path_buf(
     ))
 }
 
-pub fn get_pathbuf_from_filename_struct(filename: FileName) -> core::result::Result<PathBuf, String> {
-    match &filename {
+/// 从rustc_span::FileName中提取该文件在文件系统中的路径。
+/// 若提取失败，则返回以`Virtual: `或`Other: `开头的字符串，报告错误类型。
+pub fn get_pathbuf_from_filename_struct(filename: &FileName) -> core::result::Result<PathBuf, String> {
+    match filename {
         FileName::Real(real_file_name) => match real_file_name {
             RealFileName::LocalPath(path_buf) => Ok(fix_incorrect_local_path(path_buf)),
             RealFileName::Remapped {
@@ -55,6 +57,8 @@ pub fn get_pathbuf_from_filename_struct(filename: FileName) -> core::result::Res
     }
 }
 
+/// 存放一个crate依赖项的元数据。
+/// 包含该crate的Cargo.toml文件路径，以及该crate的根package_id。
 #[derive(Debug, Clone)]
 pub struct CrateMetadata {
     manifest_path: PathBuf,
@@ -90,6 +94,10 @@ impl Serialize for CrateMetadata {
     }
 }
 
+/// 存放一个函数或方法的元数据。
+/// 包含该函数或方法的def_id，以及该函数或方法在源代码中的文件路径和行号。
+/// 除此以外，还有该函数所属的crate的元数据。
+/// todo: 每个函数都存储一个crate元数据的做法太奢侈了，需要优化。
 #[derive(Debug, Clone)]
 pub struct FuncMetadata {
     pub def_id: rustc_span::def_id::DefId,
@@ -119,7 +127,7 @@ impl Serialize for FuncMetadata {
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("FuncMetadata", 5)?;
+        let mut state = serializer.serialize_struct("FuncMetadata", 4)?;
         state.serialize_field("def_id", &format!("{:?}", &self.def_id))?;
         state.serialize_field("define_path", &self.define_path)?;
         state.serialize_field("line_num", &self.line_num)?;
@@ -140,6 +148,48 @@ impl std::cmp::Eq for FuncMetadata {}
 impl std::hash::Hash for FuncMetadata {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.def_id.hash(state);
+    }
+}
+
+/// 存放一次函数调用的元数据。
+/// 包含调用者和被调用者的DefId，以及
+/// 调用发生所在的文件在文件系统中的路径、文件中的具体行号。
+/// 如果行号为0，那么文件系统路径一定是None。表明找不到真实的文件路径。
+#[derive(Eq)]
+pub struct CallSiteMetadata {
+    pub caller_def_id: rustc_span::def_id::DefId,
+    pub callee_def_id: rustc_span::def_id::DefId,
+    pub caller_file_path: Option<PathBuf>,
+    pub caller_line_num: usize,
+}
+
+impl PartialEq for CallSiteMetadata {
+    fn eq(&self, other: &Self) -> bool {
+        self.caller_def_id == other.caller_def_id
+            && self.callee_def_id == other.callee_def_id
+            && self.caller_line_num == other.caller_line_num
+    }
+}
+
+impl Hash for CallSiteMetadata {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.caller_def_id.hash(state);
+        self.callee_def_id.hash(state);
+        self.caller_line_num.hash(state);
+    }
+}
+
+impl Serialize for CallSiteMetadata {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("CallSiteMetadata", 4)?;
+        state.serialize_field("caller_def_id", &format!("{:?}", self.caller_def_id))?;
+        state.serialize_field("callee_def_id", &format!("{:?}", self.callee_def_id))?;
+        state.serialize_field("caller_file_path", &self.caller_file_path)?;
+        state.serialize_field("caller_line_num", &self.caller_line_num)?;
+        state.end()
     }
 }
 

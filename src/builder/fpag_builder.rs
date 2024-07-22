@@ -95,7 +95,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         // Real(Remapped { local_path: Some("/home/endericedragon/.rustup/toolchains/nightly-2024-02-03-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/range.rs"), virtual_name: "/rustc/bf3c6c5bed498f41ad815641319a1ad9bcecb8e8/library/core/src/ops/range.rs" })
         // Real(LocalPath("/home/endericedragon/playground/example_crate/fastrand-2.1.0/src/lib.rs"))
         // 枚举的完整类型定义于rustc_span/src/lib.rs
-        let filename = file.name.clone();
+        let filename = &file.name;
         let source_file_path = get_pathbuf_from_filename_struct(filename);
 
         let manifest_path = match &source_file_path {
@@ -123,7 +123,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
             },
         );
 
-        acx.func_metadatas.insert(func_metadata);
+        acx.func_metadata.insert(func_metadata);
         //? 折腾结束，您继续
 
         // if func_ref.promoted.is_none() {

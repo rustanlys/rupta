@@ -18,6 +18,7 @@ use super::PointerAnalysis;
 use crate::graph::call_graph::CSCallGraph;
 use crate::graph::func_pag::FuncPAG;
 use crate::graph::pag::*;
+use crate::info_collector::{get_pathbuf_from_filename_struct, CallSiteMetadata};
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::call_site::{AssocCallGroup, CSCallSite, CallSite, CallType};
 use crate::mir::context::{Context, ContextId};
@@ -352,7 +353,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         let caller_mir = self.acx.tcx.optimized_mir(caller_def_id);
         let call_span = caller_mir.source_info(call_location).span;
         let source_map = self.acx.tcx.sess.source_map();
-        match source_map.lookup_line(call_span.lo()) {
+        let callsite_metadata = match source_map.lookup_line(call_span.lo()) {
             Ok(source_and_line) => {
                 let source_file = source_and_line.sf;
                 // 别忘记，这儿的行号和列号全是从0开始的
@@ -364,18 +365,43 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                     source_file.name,
                     line_number
                 );
+                // 构造CallSiteMetadata
+                CallSiteMetadata {
+                    caller_def_id,
+                    callee_def_id,
+                    caller_file_path: match get_pathbuf_from_filename_struct(&source_file.name) {
+                        Ok(pathbuf) => Some(pathbuf),
+                        Err(err_msg) => {
+                            eprintln!("Error while initializing CallSiteMetadata: {}", err_msg);
+                            None
+                        }
+                    },
+                    caller_line_num: line_number,
+                }
             }
             Err(source_file_only) => {
+                // 无行号信息，应该不是来自LocalPath的crate中发生的函数调用
                 println!(
                     "Callsite: {:?} calls {:?} at {:?} line UNKNOWN",
                     caller_ref.to_string(),
                     callee_ref.to_string(),
                     source_file_only.name
                 );
+                CallSiteMetadata {
+                    caller_def_id,
+                    callee_def_id,
+                    caller_file_path: match get_pathbuf_from_filename_struct(&source_file_only.name) {
+                        Ok(pathbuf) => Some(pathbuf),
+                        Err(err_msg) => {
+                            eprintln!("Error while initializing CallSiteMetadata: {}", err_msg);
+                            None
+                        }
+                    },
+                    caller_line_num: 0,
+                }
             }
-        }
-
-        // self.
+        };
+        self.acx.callsite_metadata.insert(callsite_metadata);
 
         // 以下部分掌管比较细化的边，例如从实参指向形参的边，
         // 和从返回值指向存储返回值的变量的有向边，
