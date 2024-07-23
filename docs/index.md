@@ -28,7 +28,9 @@ GPLv3
 
 ## Reference
 
-You are welcome to use RUPTA for research and development purposes under the provided license. Please acknowledge the use of this tool by citing our CC'24 paper.
+You are welcome to use RUPTA for research and development purposes under the provided license. Please acknowledge the use of this tool by citing our CC'24 paper, and possibly the relevant CGO paper listed below.
+
+Wei Li, Dongjie He, Wenguang Chen and Jingling Xue. [Stack Filtering: Elevating Precision and Efficiency in Rust Pointer Analysis](), IEEE/ACM International Symposium on Code Generation and Optimization (CGO'25). [Accepted]()
 
 Wei Li, Dongjie He, Yujiang Gui, Wenguang Chen, and Jingling Xue. [A Context-Sensitive Pointer Analysis Framework for Rust and Its Application to Call Graph Construction](https://doi.org/10.1145/3640537.3641574), 33rd ACM SIGPLAN International Conference on Compiler Construction (CC'24). 
 
