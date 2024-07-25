@@ -46,6 +46,16 @@ pub fn dump_results<P: PAGPath, F, S>(
         info!("Dumping call graph...");
         dump_call_graph(acx, call_graph, cg_path);
 
+        // 因为尚未修改命令行参数，因此只好先暂且把输出crate元数据的部分硬编码在这里了
+        let mut fm_path_buf = PathBuf::from(cg_output);
+        fm_path_buf.pop();
+        fm_path_buf.push("crate_metadata.json");
+        info!("Dumping crate metadata...");
+        let crm_data = &acx.crate_metadata.data;
+        let crm_file = File::create(fm_path_buf.as_path()).expect("Unable to create crate_metadata file");
+        let v = crm_data.iter().map(|x| x.as_ref()).collect::<Vec<_>>();
+        serde_json::to_writer(crm_file, &v).expect("Unable to write func_metadata file");
+
         // 因为尚未修改命令行参数，因此只好先暂且把输出函数元数据的部分硬编码在这里了
         let mut fm_path_buf = PathBuf::from(cg_output);
         fm_path_buf.pop();

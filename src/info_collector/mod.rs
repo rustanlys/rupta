@@ -4,6 +4,8 @@ use cargo_metadata::{Metadata, MetadataCommand, PackageId};
 use rustc_span::{FileName, RealFileName};
 use serde::{ser::SerializeStruct, Serialize};
 
+pub mod vec_set;
+
 /// 针对rustlib/src/rust/compiler中的crate进行特别修复，将其中错误的路径替换成正确的
 pub fn fix_incorrect_local_path(incorrect_path_buf: &PathBuf) -> PathBuf {
     // 特殊处理rustc_*，它们的源代码位置和Span给出的不一样，需要进行替换
@@ -65,6 +67,20 @@ pub struct CrateMetadata {
     metadata: Metadata,
 }
 
+impl PartialEq for CrateMetadata {
+    fn eq(&self, other: &Self) -> bool {
+        self.manifest_path == other.manifest_path
+    }
+}
+
+impl Eq for CrateMetadata {}
+
+impl Hash for CrateMetadata {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.manifest_path.hash(state);
+    }
+}
+
 impl CrateMetadata {
     pub fn new(manifest_path: &str) -> Self {
         let mut cmd = MetadataCommand::new();
@@ -103,7 +119,7 @@ pub struct FuncMetadata {
     pub def_id: rustc_span::def_id::DefId,
     pub define_path: Option<PathBuf>,
     pub line_num: usize,
-    pub crate_metadata: Option<CrateMetadata>,
+    pub crate_metadata_idx: Option<usize>,
 }
 
 impl FuncMetadata {
@@ -111,13 +127,13 @@ impl FuncMetadata {
         def_id: rustc_span::def_id::DefId,
         define_path: Option<PathBuf>,
         line_num: usize,
-        crate_metadata: Option<CrateMetadata>,
+        crate_metadata_idx: Option<usize>,
     ) -> Self {
         Self {
             def_id,
             define_path,
             line_num: line_num,
-            crate_metadata,
+            crate_metadata_idx,
         }
     }
 }
@@ -131,7 +147,7 @@ impl Serialize for FuncMetadata {
         state.serialize_field("def_id", &format!("{:?}", &self.def_id))?;
         state.serialize_field("define_path", &self.define_path)?;
         state.serialize_field("line_num", &self.line_num)?;
-        state.serialize_field("crate_metadata", &self.crate_metadata)?;
+        state.serialize_field("crate_metadata_idx", &self.crate_metadata_idx)?;
         state.end()
     }
 }

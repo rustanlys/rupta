@@ -599,6 +599,27 @@ impl<...> ContextSensitivePTA<...> {
 4. `src/info_collector/mod.rs`中，用`serde`给`FuncMetadata`等结构体实现了了`Serialize` trait。
 5. `src/util/results_dumper.rs`的`dump_results`函数中，增加了输出`func_metadata`的语句。
 
+#### 优化内存存储结构
+
+在存储及输出函数及其所属Crate的过程中，每个`FuncMetadata`都会存储一个`CrateMetadata`结构。然而，一个crate中大概率有不止一个函数，这意味着相同内容的`CrateMetadata`会在数个`FuncMetadata`中存储多次。这样显然十分浪费内存。
+
+一种想法自然是：开个数组存`CrateMetadata`，而只在`FuncMetadata`中存储这个`CrateMetadata`在数组中的下标。但是这个数组同时需要具有去重的功能，因为不同函数可以属于同一个Crate。
+
+基于上述需求，设想并了一个结合`HashMap`和`Vec`的新数据结构`VecSet`，它的定义长这样：
+
+```rs
+pub struct VecSet<T: Eq + Hash> {
+    // 真正存储数据的数组
+    data: Vec<Rc<T>>,
+    // 记录每个数据项在数组中的下标，用于去重
+    included: HashMap<Rc<T>, usize>,
+}
+```
+
+使用`Rc<T>`，可以有效避免同一份数据项存储两遍的问题。经过测试，使用`Rc<T>`的`VecSet`比未使用`Rc<T>`的朴素版本能节省将近一半的内存用量（1608KB 减小到 868KB）。
+
+
+
 #### 将函数的调用情况输出到文件
 
 和输出函数信息类似，如法炮制：

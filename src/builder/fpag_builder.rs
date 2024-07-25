@@ -28,8 +28,8 @@ use crate::builder::{call_graph_builder, special_function_handler};
 use crate::graph::func_pag::FuncPAG;
 use crate::graph::pag::PAGEdgeEnum;
 use crate::info_collector::{
-    get_cargo_toml_path_from_source_file_path_buf,
-    get_pathbuf_from_filename_struct, CrateMetadata, FuncMetadata,
+    get_cargo_toml_path_from_source_file_path_buf, get_pathbuf_from_filename_struct, CrateMetadata,
+    FuncMetadata,
 };
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::call_site::CallSite;
@@ -103,6 +103,19 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
             Err(message) => Err(message.to_owned()),
         };
 
+        let crate_metadata_usize = if let Some(crate_metadata) = match manifest_path {
+            Ok(path) => Some(CrateMetadata::new(&path)),
+
+            Err(message) => {
+                eprintln!("Error: {}", message);
+                None
+            }
+        } {
+            Some(acx.crate_metadata.insert(crate_metadata))
+        } else {
+            None
+        };
+
         let func_metadata = FuncMetadata::new(
             def_id_of_func,
             match source_file_path {
@@ -110,17 +123,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
                 _ => None,
             },
             line_num,
-            match manifest_path {
-                Ok(path) => {
-                    let crate_metadata = CrateMetadata::new(&path);
-                    Some(crate_metadata)
-                }
-
-                Err(message) => {
-                    eprintln!("Error: {}", message);
-                    None
-                }
-            },
+            crate_metadata_usize,
         );
 
         acx.func_metadata.insert(func_metadata);
