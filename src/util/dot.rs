@@ -344,14 +344,14 @@ mod test {
     fn test_nodeindexlable_option() {
         let graph = simple_graph();
         let dot = format!("{:?}", Dot::with_config(&graph, &[Config::NodeIndexLabel]));
-        assert_eq!(dot, "digraph {\n    0 [ label = \"0\" ]\n    1 [ label = \"1\" ]\n    0 -> 1 [ label = \"\\\"edge_label\\\"\" ]\n}\n");
+        assert_eq!(dot, "digraph {\n    0 [ label = \"0\" ]\n    1 [ label = \"1\" ]\n    0 -> 1 [ label = \"edge_label\" ]\n}\n");
     }
 
     #[test]
     fn test_edgeindexlable_option() {
         let graph = simple_graph();
         let dot = format!("{:?}", Dot::with_config(&graph, &[Config::EdgeIndexLabel]));
-        assert_eq!(dot, "digraph {\n    0 [ label = \"\\\"A\\\"\" ]\n    1 [ label = \"\\\"B\\\"\" ]\n    0 -> 1 [ label = \"0\" ]\n}\n");
+        assert_eq!(dot, "digraph {\n    0 [ label = \"A\" ]\n    1 [ label = \"B\" ]\n    0 -> 1 [ label = \"0\" ]\n}\n");
     }
 
     #[test]
@@ -360,7 +360,7 @@ mod test {
         let dot = format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
         assert_eq!(
             dot,
-            "digraph {\n    0 [ label = \"\\\"A\\\"\" ]\n    1 [ label = \"\\\"B\\\"\" ]\n    0 -> 1 [ ]\n}\n"
+            "digraph {\n    0 [ label = \"A\" ]\n    1 [ label = \"B\" ]\n    0 -> 1 [ ]\n}\n"
         );
     }
 
@@ -370,7 +370,7 @@ mod test {
         let dot = format!("{:?}", Dot::with_config(&graph, &[Config::NodeNoLabel]));
         assert_eq!(
             dot,
-            "digraph {\n    0 [ ]\n    1 [ ]\n    0 -> 1 [ label = \"\\\"edge_label\\\"\" ]\n}\n"
+            "digraph {\n    0 [ ]\n    1 [ ]\n    0 -> 1 [ label = \"edge_label\" ]\n}\n"
         );
     }
 
