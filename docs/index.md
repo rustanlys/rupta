@@ -26,7 +26,7 @@ Please refer to this [documentation]({{ site.github.doc_url }}) to understand th
 
 GPLv3
 
-## Reference
+## References
 
 You are welcome to use RUPTA for research and development purposes under the included license. Please acknowledge the use of this tool by citing the following papers:
 
