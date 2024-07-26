@@ -335,149 +335,204 @@ impl<'a, T: Idx> Iterator for HybridIter<'a, T> {
     }
 }
 
-#[test]
-fn hybrid_set_tests() {
-    // small set test
-    let mut a = HybridPointsToSet::<u32>::new();
-    a.insert(1);
-    a.insert(3);
-    a.insert(5);
-    a.insert(3);
-    a.insert(11);
+#[cfg(test)]
+mod test {
+    use std::collections::HashSet;
+    use rand::Rng;
+    use crate::pts_set::points_to::{
+        HybridPointsToSet, HybridSet, 
+        PointsToSet, SMALL_SET_CAPACITY
+    };
 
-    assert_eq!(a.count(), 4);
-    assert_eq!(a.contains(3), true);
-    assert_eq!(a.contains(7), false);
-    assert_eq!(a.iter().collect::<Vec<_>>(), [1, 3, 5, 11]);
-    assert!(matches!(a.points_to, HybridSet::SmallSet(_)));
+    fn random_set(len: usize) -> HashSet<u32> {
+        let mut rng = rand::thread_rng();
+        let mut set = HashSet::new();
+        while set.len() < len {
+            let x = rng.gen_range(1..1000);
+            set.insert(x);
+        }
+        set
+    }
 
-    // large set test
-    let mut b = HybridPointsToSet::<u32>::new();
-    b.insert(1);
-    b.insert(10);
-    b.insert(19);
-    b.insert(62);
-    b.insert(63);
-    b.insert(64);
-    b.insert(65);
-    b.insert(66);
-    b.insert(99);
-    b.insert(2);
-    b.insert(20);
-    b.insert(38);
-    b.insert(124);
-    b.insert(126);
-    b.insert(128);
-    b.insert(130);
-    b.insert(132);
-    b.insert(99);
-    assert_eq!(b.count(), 17);
-    assert_eq!(b.contains(38), true);
-    assert_eq!(b.contains(7), false);
-    assert_eq!(
-        b.iter().collect::<Vec<_>>(),
-        [1, 2, 10, 19, 20, 38, 62, 63, 64, 65, 66, 99, 124, 126, 128, 130, 132]
-    );
-    assert_eq!(b.superset(&a), false);
-    assert!(matches!(b.points_to, HybridSet::LargeSet(_)));
+    fn random_value_from_set(set: &HashSet<u32>) -> u32 {
+        let mut rng = rand::thread_rng();
+        let index = rng.gen_range(0..set.len());
+        set.iter().nth(index).cloned().unwrap()
+    }
 
-    // remove test
-    assert_eq!(a.remove(3), true);
-    assert_eq!(a.count(), 3);
-    assert_eq!(a.contains(3), false);
-    assert_eq!(a.remove(17), false);
-    a.insert(3);
+    #[test]
+    fn small_set_test() {
+        let rand_set = random_set(8);
+        let mut small_set = HybridPointsToSet::<u32>::new();
+        for x in rand_set.iter() {
+            small_set.insert(*x);
+        }
+        assert_eq!(small_set.count(), 8);
+        assert!(matches!(small_set.points_to, HybridSet::SmallSet(_)));
+        assert_eq!(
+            small_set.iter().collect::<HashSet<_>>(), 
+            rand_set
+        );
 
-    assert_eq!(b.remove(10), true);
-    assert_eq!(b.count(), 16);
-    assert_eq!(b.contains(10), false);
-    assert_eq!(b.remove(17), false);
-    b.insert(10);
+        let rand_val = random_value_from_set(&rand_set);
+        assert_eq!(small_set.contains(rand_val), true);
+        assert_eq!(small_set.remove(rand_val), true);
+        assert_eq!(small_set.contains(rand_val), false);
+        assert_eq!(small_set.count(), 7);
+    }
 
-    // union test
-    // small set union large set
-    let mut c = a.clone();
-    c.union(&b);
-    assert_eq!(c.count(), 20);
-    assert_eq!(c.superset(&a), true);
-    assert_eq!(c.superset(&b), true);
-    assert_eq!(
-        c.iter().collect::<Vec<_>>(),
-        [1, 2, 3, 5, 10, 11, 19, 20, 38, 62, 63, 64, 65, 66, 99, 124, 126, 128, 130, 132]
-    );
-    assert!(matches!(c.points_to, HybridSet::LargeSet(_)));
+    #[test]
+    fn large_set_test() {
+        let rand_set = random_set(SMALL_SET_CAPACITY + 3);
+        let mut large_set = HybridPointsToSet::<u32>::new();
+        for x in rand_set.iter() {
+            large_set.insert(*x);
+        }
+        assert_eq!(large_set.count(), SMALL_SET_CAPACITY + 3);
+        assert!(matches!(large_set.points_to, HybridSet::LargeSet(_)));
+        assert_eq!(
+            large_set.iter().collect::<HashSet<_>>(), 
+            rand_set
+        );
 
-    // small set union small set
-    c = a.clone();
-    let mut d = HybridPointsToSet::<u32>::new();
-    d.insert(3);
-    d.insert(17);
-    d.insert(25);
-    d.insert(37);
-    d.insert(46);
-    d.insert(55);
-    d.insert(63);
-    d.insert(77);
-    d.insert(89);
-    d.insert(90);
-    d.insert(102);
-    d.insert(111);
-    d.insert(123);
-    d.insert(134);
-    c.union(&d);
-    assert_eq!(c.count(), 17);
-    assert_eq!(c.superset(&a), true);
-    assert_eq!(
-        c.iter().collect::<Vec<_>>(),
-        [1, 3, 5, 11, 17, 25, 37, 46, 55, 63, 77, 89, 90, 102, 111, 123, 134]
-    );
-    assert!(matches!(d.points_to, HybridSet::SmallSet(_)));
-    assert!(matches!(c.points_to, HybridSet::LargeSet(_)));
+        let rand_val = random_value_from_set(&rand_set);
+        assert_eq!(large_set.contains(rand_val), true);
+        assert_eq!(large_set.remove(rand_val), true);
+        assert_eq!(large_set.contains(rand_val), false);
+        assert_eq!(large_set.count(), SMALL_SET_CAPACITY + 2);
+    }
 
-    // large set union small set
-    let mut e = b.clone();
-    e.union(&a);
-    assert_eq!(e.count(), 20);
-    assert_eq!(e.superset(&a), true);
-    assert_eq!(e.superset(&b), true);
-    assert_eq!(
-        e.iter().collect::<Vec<_>>(),
-        [1, 2, 3, 5, 10, 11, 19, 20, 38, 62, 63, 64, 65, 66, 99, 124, 126, 128, 130, 132]
-    );
-    assert!(matches!(e.points_to, HybridSet::LargeSet(_)));
 
-    // large set union large set
-    let mut f = b.clone();
-    f.insert(156);
-    f.insert(10001);
-    e.union(&f);
-    assert_eq!(e.count(), 22);
-    assert_eq!(
-        e.iter().collect::<Vec<_>>(),
-        [1, 2, 3, 5, 10, 11, 19, 20, 38, 62, 63, 64, 65, 66, 99, 124, 126, 128, 130, 132, 156, 10001]
-    );
+    #[test] 
+    fn small_set_union_large_set() {
+        let rand_small_set = random_set(8);
+        let mut small_set = HybridPointsToSet::<u32>::new();
+        for x in rand_small_set.iter() {
+            small_set.insert(*x);
+        }
+        let rand_large_set = random_set(SMALL_SET_CAPACITY + 3);
+        let mut large_set = HybridPointsToSet::<u32>::new();
+        for x in rand_large_set.iter() {
+            large_set.insert(*x);
+        }
 
-    // subtract test
-    c = a.clone();
-    assert_eq!(c.subtract(&b), true);
-    assert_eq!(c.count(), 3);
-    assert_eq!(c.contains(1), false);
+        let mut union_set = small_set.clone();
+        union_set.union(&large_set);
+        assert_eq!(union_set.superset(&small_set), true);
+        assert_eq!(union_set.superset(&large_set), true);
+        assert_eq!(
+            union_set.iter().collect::<HashSet<_>>(), 
+            rand_small_set.union(&rand_large_set)
+                .cloned()
+                .collect::<HashSet<_>>()
+        );
+    }
 
-    e = b.clone();
-    assert_eq!(e.subtract(&a), true);
-    assert_eq!(e.count(), 16);
-    assert_eq!(e.contains(1), false);
+    #[test]
+    fn large_set_union_small_set() {
+        let rand_small_set = random_set(8);
+        let mut small_set = HybridPointsToSet::<u32>::new();
+        for x in rand_small_set.iter() {
+            small_set.insert(*x);
+        }
+        let rand_large_set = random_set(SMALL_SET_CAPACITY + 3);
+        let mut large_set = HybridPointsToSet::<u32>::new();
+        for x in rand_large_set.iter() {
+            large_set.insert(*x);
+        }
 
-    // intersect test
-    c = a.clone();
-    assert_eq!(c.intersect(&b), true);
-    assert_eq!(c.count(), 1);
-    assert_eq!(c.contains(1), true);
-    assert!(matches!(c.points_to, HybridSet::SmallSet(_)));
+        let mut union_set = large_set.clone();
+        union_set.union(&small_set);
+        assert_eq!(
+            union_set.iter().collect::<HashSet<_>>(), 
+            rand_small_set.union(&rand_large_set)
+                .cloned()
+                .collect::<HashSet<_>>()
+        );
+    }
 
-    e = b.clone();
-    assert_eq!(e.intersect(&a), true);
-    assert_eq!(e.count(), 1);
-    assert_eq!(e.contains(1), true);
-    assert!(matches!(e.points_to, HybridSet::SmallSet(_)));
+    #[test]
+    fn large_set_union_large_set() {
+        let rand_set1 = random_set(SMALL_SET_CAPACITY + 3);
+        let mut large_set1 = HybridPointsToSet::<u32>::new();
+        for x in rand_set1.iter() {
+            large_set1.insert(*x);
+        }
+        let rand_set2 = random_set(SMALL_SET_CAPACITY + 3);
+        let mut large_set2 = HybridPointsToSet::<u32>::new();
+        for x in rand_set2.iter() {
+            large_set2.insert(*x);
+        }
+
+        let mut union_set = large_set1.clone();
+        union_set.union(&large_set2);
+        assert_eq!(
+            union_set.iter().collect::<HashSet<_>>(), 
+            rand_set1.union(&rand_set2)
+                .cloned()
+                .collect::<HashSet<_>>()
+        );
+    }
+
+    #[test]
+    fn subtract_test() {
+        let rand_small_set = random_set(8);
+        let mut small_set = HybridPointsToSet::<u32>::new();
+        for x in rand_small_set.iter() {
+            small_set.insert(*x);
+        }
+        let mut rand_large_set = random_set(SMALL_SET_CAPACITY + 3);
+        for &x in rand_small_set.iter().take(5) {
+            rand_large_set.insert(x);
+        }
+        let mut large_set = HybridPointsToSet::<u32>::new();
+        for x in rand_large_set.iter() {
+            large_set.insert(*x);
+        }
+        
+        let mut cloned_set = small_set.clone();
+        assert_eq!(cloned_set.subtract(&large_set), true);
+        assert_eq!(
+            cloned_set.iter().collect::<HashSet<_>>(), 
+            rand_small_set.difference(&rand_large_set)
+                .cloned()
+                .collect::<HashSet<_>>()
+        );
+
+        cloned_set = large_set.clone();
+        assert_eq!(cloned_set.subtract(&small_set), true);
+        assert_eq!(
+            cloned_set.iter().collect::<HashSet<_>>(), 
+            rand_large_set.difference(&rand_small_set)
+                .cloned()
+                .collect::<HashSet<_>>()
+        );
+    }
+
+    #[test]
+    fn intersect_test() {
+        let rand_small_set = random_set(8);
+        let mut small_set = HybridPointsToSet::<u32>::new();
+        for x in rand_small_set.iter() {
+            small_set.insert(*x);
+        }
+        let mut rand_large_set = random_set(SMALL_SET_CAPACITY + 3);
+        for &x in rand_small_set.iter().take(5) {
+            rand_large_set.insert(x);
+        }
+        let mut large_set = HybridPointsToSet::<u32>::new();
+        for x in rand_large_set.iter() {
+            large_set.insert(*x);
+        }
+        
+        let mut cloned_set = large_set.clone();
+        assert_eq!(cloned_set.intersect(&small_set), true);
+        assert_eq!(
+            cloned_set.iter().collect::<HashSet<_>>(), 
+            rand_large_set.intersection(&rand_small_set)
+                .cloned()
+                .collect::<HashSet<_>>()
+        );
+        assert!(matches!(cloned_set.points_to, HybridSet::SmallSet(_)));
+    }
 }
