@@ -84,9 +84,12 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
     /// Initialize the analysis.
     pub fn initialize(&mut self) {
         // add the entry point to the call graph
-        let entry_point = self.acx.entry_point;
-        let entry_func_id = self.acx.get_func_id(entry_point, self.tcx().mk_args(&[]));
-        self.call_graph.add_node(entry_func_id);
+        let entry_points = self.acx.entry_points.clone();
+
+        for entry_point in entry_points {
+            let entry_func_id = self.acx.get_func_id(entry_point, self.tcx().mk_args(&[]));
+            self.call_graph.add_node(entry_func_id);
+        }
 
         // process statements of reachable functions
         self.process_reach_funcs();

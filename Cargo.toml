@@ -27,3 +27,6 @@ rpds = { version = "*", features = ["serde"] }
 rustc_tools_util = "*"
 petgraph = "*"
 shellwords = "*"
+
+[package.metadata.rust-analyzer]
+rustc_private = true
