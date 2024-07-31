@@ -401,7 +401,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                 }
             }
         };
-        self.acx.callsite_metadata.insert(callsite_metadata);
+        self.acx.overall_metadata.callsite_metadata.insert(callsite_metadata);
 
         // 以下部分掌管比较细化的边，例如从实参指向形参的边，
         // 和从返回值指向存储返回值的变量的有向边，

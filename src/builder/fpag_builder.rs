@@ -111,7 +111,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
                 None
             }
         } {
-            Some(acx.crate_metadata.insert(crate_metadata))
+            Some(acx.overall_metadata.crate_metadata.insert(crate_metadata))
         } else {
             None
         };
@@ -126,7 +126,7 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
             crate_metadata_usize,
         );
 
-        acx.func_metadata.insert(func_metadata);
+        acx.overall_metadata.func_metadata.insert(func_metadata);
         //? 折腾结束，您继续
 
         // if func_ref.promoted.is_none() {

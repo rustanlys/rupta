@@ -15,8 +15,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::info_collector::CrateMetadata;
-use crate::info_collector::{CallSiteMetadata, FuncMetadata, vec_set::VecSet};
+use crate::info_collector::OverallMetadata;
 use crate::mir::call_site::{BaseCallSite, CalleeIdentifier};
 use crate::mir::function::{FuncId, FunctionReference, GenericArgE};
 use crate::mir::known_names::{KnownNames, KnownNamesCache};
@@ -74,12 +73,8 @@ pub struct AnalysisContext<'tcx, 'compilation> {
 
     pub known_names_cache: KnownNamesCache,
 
-    /// 存储所有函数所属的crate的元数据
-    pub crate_metadata: VecSet<CrateMetadata>,
-    /// 存储待分析crate中出现过的所有函数的元数据
-    pub func_metadata: HashSet<FuncMetadata>,
-    /// 存储所有函数的函数调用关系的元数据
-    pub callsite_metadata: HashSet<CallSiteMetadata>,
+    /// 存储所有元数据
+    pub overall_metadata: OverallMetadata,
 }
 
 impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
@@ -145,9 +140,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
                 aux_local_indexer: HashMap::new(),
                 concretized_heap_objs: HashMap::new(),
                 known_names_cache: KnownNamesCache::create_cache_from_language_items(),
-                crate_metadata: VecSet::new(),
-                func_metadata: HashSet::new(),
-                callsite_metadata: HashSet::new(),
+                overall_metadata: OverallMetadata::default(),
             })
         } else {
             error!("Entry point not found");

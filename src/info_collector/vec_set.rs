@@ -7,10 +7,31 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
 use std::rc::Rc;
+use serde::ser::SerializeSeq;
+use serde::Serialize;
 
-pub struct VecSet<T: Eq + Hash> {
+pub struct VecSet<T> {
     pub data: Vec<Rc<T>>,
     included: HashMap<Rc<T>, usize>,
+}
+
+impl<T> Default for VecSet<T> {
+    fn default() -> Self {
+        Self { data: Default::default(), included: Default::default() }
+    }
+}
+
+impl<T: Eq + Hash + Serialize> Serialize for VecSet<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        let mut seq = serializer.serialize_seq(Some(self.data.len()))?;
+        for item in self.data.iter().map(|x| x.as_ref()) {
+            seq.serialize_element(item)?;
+        }
+
+        seq.end()
+    }
 }
 
 impl<T: Eq + Hash> Index<usize> for VecSet<T> {

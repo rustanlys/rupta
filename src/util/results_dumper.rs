@@ -47,34 +47,13 @@ pub fn dump_results<P: PAGPath, F, S>(
         dump_call_graph(acx, call_graph, cg_path);
 
         // 因为尚未修改命令行参数，因此只好先暂且把输出crate元数据的部分硬编码在这里了
-        let mut fm_path_buf = PathBuf::from(cg_output);
-        fm_path_buf.pop();
-        fm_path_buf.push("crate_metadata.json");
-        info!("Dumping crate metadata...");
-        let crm_data = &acx.crate_metadata.data;
-        let crm_file = File::create(fm_path_buf.as_path()).expect("Unable to create crate_metadata file");
-        let v = crm_data.iter().map(|x| x.as_ref()).collect::<Vec<_>>();
-        serde_json::to_writer(crm_file, &v).expect("Unable to write func_metadata file");
-
-        // 因为尚未修改命令行参数，因此只好先暂且把输出函数元数据的部分硬编码在这里了
-        let mut fm_path_buf = PathBuf::from(cg_output);
-        fm_path_buf.pop();
-        fm_path_buf.push("func_metadata.json");
-        info!("Dumping function metadatas...");
-        let fm_data = &acx.func_metadata;
-        let fm_file = File::create(fm_path_buf.as_path()).expect("Unable to create func_metadata file");
-        let v = fm_data.iter().collect::<Vec<_>>();
-        serde_json::to_writer(fm_file, &v).expect("Unable to write func_metadata file");
-
-        // 因为尚未修改命令行参数，因此只好先暂且把输出函数调用元数据的部分硬编码在这里了
-        let mut cm_path_buf = PathBuf::from(cg_output);
-        cm_path_buf.pop();
-        cm_path_buf.push("callsite_metadata.json");
-        info!("Dumping call metadatas...");
-        let cm_data = &acx.callsite_metadata;
-        let cm_file = File::create(cm_path_buf.as_path()).expect("Unable to create callsite_metadata file");
-        let v = cm_data.iter().collect::<Vec<_>>();
-        serde_json::to_writer(cm_file, &v).expect("Unable to write callsite_metadata file");
+        let mut om_path_buf = PathBuf::from(cg_output);
+        om_path_buf.pop();
+        om_path_buf.push("overall_metadata.json");
+        info!("Dumping overall metadata...");
+        let om_data = &acx.overall_metadata;
+        let om_file = File::create(om_path_buf.as_path()).expect("Unable to create overall_metadata file");
+        serde_json::to_writer(om_file, &om_data).expect("Unable to serialize overall_metadata");
     }
 
     // dump mir for reachable functions
