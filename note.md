@@ -382,7 +382,7 @@ Rupta和MIRAI都没有非常仔细地收集有关Crate的信息，MIRAI的`Crate
 
 经过搜索，以下代码可以实现这样的功能，它位于`src/builder/fpag_builder.rs`的`FuncPAGBuilder::new`函数中。
 
-```rs
+```rust
 // 整一份当前上下文的拷贝。
 let cur_tcx = acx.tcx.clone(); // cur_tcx: TyCtxt<'tcx>
 // 获取一些关于当前函数DefId和所属crate的信息

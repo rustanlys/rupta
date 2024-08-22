@@ -358,13 +358,13 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                 let source_file = source_and_line.sf;
                 // 别忘记，这儿的行号和列号全是从0开始的
                 let line_number = 1 + source_and_line.line;
-                println!(
-                    "Callsite: {:?} calls {:?} at {:?} line {}",
-                    caller_ref.to_string(),
-                    callee_ref.to_string(),
-                    source_file.name,
-                    line_number
-                );
+                // println!(
+                //     "Callsite: {:?} calls {:?} at {:?} line {}",
+                //     caller_ref.to_string(),
+                //     callee_ref.to_string(),
+                //     source_file.name,
+                //     line_number
+                // );
                 // 构造CallSiteMetadata
                 CallSiteMetadata {
                     caller_def_id,
@@ -381,12 +381,12 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
             }
             Err(source_file_only) => {
                 // 无行号信息，应该不是来自LocalPath的crate中发生的函数调用
-                println!(
-                    "Callsite: {:?} calls {:?} at {:?} line UNKNOWN",
-                    caller_ref.to_string(),
-                    callee_ref.to_string(),
-                    source_file_only.name
-                );
+                // println!(
+                //     "Callsite: {:?} calls {:?} at {:?} line UNKNOWN",
+                //     caller_ref.to_string(),
+                //     callee_ref.to_string(),
+                //     source_file_only.name
+                // );
                 CallSiteMetadata {
                     caller_def_id,
                     callee_def_id,
