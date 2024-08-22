@@ -483,6 +483,14 @@ impl Path {
     pub fn is_constant(&self) -> bool {
         matches!(self.value, PathEnum::Constant)
     } 
+
+    pub fn is_promoted_constant(&self) -> bool {
+        matches!(self.value, PathEnum::PromotedConstant{..})
+    }
+
+    pub fn is_static_variable(&self) -> bool {
+        matches!(self.value, PathEnum::StaticVariable{..})
+    }
 }
 
 

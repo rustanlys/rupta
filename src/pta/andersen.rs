@@ -142,7 +142,11 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         let fpag = unsafe { &*(self.pag.func_pags.get(&func_id).unwrap() as *const FuncPAG) };
         let edges_iter = fpag.internal_edges_iter();
         for (src, dst, kind) in edges_iter {
-            self.pag.add_edge(src, dst, kind.clone());
+            if let Some(edge_id) = self.pag.add_edge(src, dst, kind.clone()) {
+                if src.is_promoted_constant() || src.is_static_variable() {
+                    self.inter_proc_edges_queue.push(edge_id);
+                }
+            }
         }
 
         // add edges in the promoted functions
