@@ -17,6 +17,7 @@ use std::rc::Rc;
 
 use crate::mir::function::{FuncId, FunctionReference, GenericArgE};
 use crate::mir::known_names::{KnownNames, KnownNamesCache};
+use crate::mir::visibility::lib_entry_funcs;
 use crate::mir::path::Path;
 use crate::util;
 use crate::util::options::AnalysisOptions;
@@ -33,7 +34,7 @@ pub struct AnalysisContext<'tcx, 'compilation> {
     pub session: &'compilation Session,
 
     /// The entry function of the analysis.
-    pub entry_point: DefId,
+    pub entry_points: HashSet<DefId>,
 
     /// Options of the analysis.
     pub analysis_options: AnalysisOptions,
@@ -80,7 +81,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         analysis_options: AnalysisOptions,
     ) -> Option<Self> {
         info!("Initializing AnalysisContext");
-        let mut entry_fn_def_id: Option<DefId> = None;
+        let mut entry_fn_def_ids = HashSet::new();
 
         // Find the DefId for the entry point according to the function name
         if !analysis_options.entry_func.is_empty() {
@@ -90,33 +91,37 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
                 if def_kind == DefKind::Fn || def_kind == DefKind::AssocFn {
                     let item_name = tcx.item_name(local_def_id.to_def_id());
                     if item_name.to_string() == *entr_func {
-                        entry_fn_def_id = Some(local_def_id.to_def_id());
+                        entry_fn_def_ids.insert(local_def_id.to_def_id());
                     }
                 }
             }
+        } else {
+            // If `entry_func` is not specified and the local crate is a library,
+            // then we add all effectively public (i.e. can be called by library users)
+            // functions to the `entry_funcs`.
+            entry_fn_def_ids.extend(&lib_entry_funcs(tcx));
         }
 
-        if entry_fn_def_id.is_none() {
+        if entry_fn_def_ids.is_empty() {
             // If `entry_def_id` flag is provided, find entry point according to the index
-            entry_fn_def_id = if let Some(entry_def_id) = analysis_options.entry_def_id {
-                Some(DefId::local(DefIndex::from_u32(entry_def_id)))
+            if let Some(entry_def_id) = analysis_options.entry_def_id {
+                entry_fn_def_ids.insert(DefId::local(DefIndex::from_u32(entry_def_id)));
             } else {
                 // If no entry point specified, use the default entry
                 if let Some((def_id, _)) = tcx.entry_fn(()) {
-                    Some(def_id)
-                } else {
-                    None
+                    entry_fn_def_ids.insert(def_id);
                 }
             }
         }
 
-        if let Some(entry_def_id) = entry_fn_def_id {
-            let entry_name = tcx.item_name(entry_def_id);
-            info!("Entry Point: {:?}, DefId: {:?}", entry_name, entry_def_id);
+        if !entry_fn_def_ids.is_empty() {
+            entry_fn_def_ids
+                .iter()
+                .for_each(|def_id| info!("Entry Point: {:?}, DefId: {:?}", tcx.item_name(*def_id), def_id));
             Some(Self {
                 tcx,
                 session,
-                entry_point: entry_def_id,
+                entry_points: entry_fn_def_ids,
                 analysis_options,
                 functions: IndexVec::new(),
                 func_id_map: HashMap::new(),
@@ -323,6 +328,4 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         self.aux_local_indexer.insert(func_id, aux_local_index + 1);
         aux
     }
-
 }
-
