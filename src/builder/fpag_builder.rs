@@ -73,9 +73,9 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         debug!("Building FuncPAG for {:?}: {}", func_id, func_ref.to_string());
 
         //? 让我康康在DefId上能折腾出什么名堂来
-        let cur_tcx = acx.tcx.clone();
+        let cur_tcx = &acx.tcx;
         // 获取一些关于当前函数DefId和所属crate的信息
-        let def_id_of_func = func_ref.def_id.clone();
+        let def_id_of_func = func_ref.def_id;
         // let crate_index_num = def_id_of_func.krate;
         // 有crate的名字，但是没有版本号
         // let crate_name = cur_tcx.crate_name(crate_index_num);
