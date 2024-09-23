@@ -7,10 +7,9 @@
 
 use itertools::Itertools;
 
-use clap::{Arg, Command};
 use clap::error::ErrorKind;
+use clap::{Arg, Command};
 use rustc_tools_util::VersionInfo;
-
 
 use crate::pta::PTAType;
 
@@ -19,7 +18,10 @@ const RUPTA_USAGE: &str = r#"pta [OPTIONS] INPUT -- [RUSTC OPTIONS]"#;
 /// The version information from Cargo.toml.
 fn version() -> &'static str {
     let version_info = rustc_tools_util::get_version_info!();
-    let version = format!("v{}.{}.{}", version_info.major, version_info.minor, version_info.patch);
+    let version = format!(
+        "v{}.{}.{}",
+        version_info.major, version_info.minor, version_info.patch
+    );
     Box::leak(version.into_boxed_str())
 }
 
@@ -66,6 +68,10 @@ fn make_options_parser() -> Command<'static> {
             .long("dump-call-graph")
             .takes_value(true)
             .help("Dump the call graph in DOT format to the output file."))
+        .arg(Arg::new("overall-metadata-output")
+            .long("dump-overall-metadata")
+            .takes_value(true)
+            .help("Dump overall metadata in JSON format to the output file."))
         .arg(Arg::new("pts-output")
             .long("dump-pts")
             .takes_value(true)
@@ -109,6 +115,7 @@ pub struct AnalysisOptions {
 
     pub dump_stats: bool,
     pub call_graph_output: Option<String>,
+    pub overall_metadata_output: Option<String>,
     pub pts_output: Option<String>,
     pub mir_output: Option<String>,
     pub type_indices_output: Option<String>,
@@ -127,6 +134,7 @@ impl Default for AnalysisOptions {
             cast_constraint: true,
             dump_stats: true,
             call_graph_output: None,
+            overall_metadata_output: None,
             pts_output: None,
             mir_output: None,
             type_indices_output: None,
@@ -152,8 +160,7 @@ impl AnalysisOptions {
             // 1. 没找着那个--，说明这些参数很可能不是给Rupta准备的
             // The arguments may not be intended for RUPTA and may get here via some tool, so do not
             // report errors here, but just assume that the arguments were not meant for RUPTA.
-            match make_options_parser().try_get_matches_from(pta_args.iter())
-            {
+            match make_options_parser().try_get_matches_from(pta_args.iter()) {
                 // 按照Rupta的参数格式解析还真就解析成功了，说明这些确实是Rupta的参数
                 Ok(matches) => {
                     // Looks like these are RUPTA options after all and there are no rustc options.
@@ -220,6 +227,7 @@ impl AnalysisOptions {
 
         self.dump_stats = matches.contains_id("dump-stats");
         self.call_graph_output = matches.get_one::<String>("call-graph-output").cloned();
+        self.overall_metadata_output = matches.get_one::<String>("overall-metadata-output").cloned();
         self.pts_output = matches.get_one::<String>("pts-output").cloned();
         self.mir_output = matches.get_one::<String>("mir-output").cloned();
         self.unsafe_stat_output = matches.get_one::<String>("unsafe-stats-output").cloned();
@@ -235,5 +243,4 @@ impl AnalysisOptions {
 
         rustc_args
     }
-
 }

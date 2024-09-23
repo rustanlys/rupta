@@ -8,7 +8,6 @@ use petgraph::visit::EdgeRef;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::graph::call_graph::{CGCallSite, CGFunction, CSCallGraph, CallGraph};
@@ -45,14 +44,14 @@ pub fn dump_results<P: PAGPath, F, S>(
         let cg_path = std::path::Path::new(cg_output);
         info!("Dumping call graph...");
         dump_call_graph(acx, call_graph, cg_path);
+    }
 
-        // 因为尚未修改命令行参数，因此只好先暂且把输出crate元数据的部分硬编码在这里了
-        let mut om_path_buf = PathBuf::from(cg_output);
-        om_path_buf.pop();
-        om_path_buf.push("overall_metadata.json");
+    // dump overall metadata
+    if let Some(om_output) = &acx.analysis_options.overall_metadata_output {
+        let om_path_buf = std::path::Path::new(om_output);
         info!("Dumping overall metadata...");
         let om_data = &acx.overall_metadata;
-        let om_file = File::create(om_path_buf.as_path()).expect("Unable to create overall_metadata file");
+        let om_file = File::create(om_path_buf).expect("Unable to create overall_metadata file");
         serde_json::to_writer(om_file, &om_data).expect("Unable to serialize overall_metadata");
     }
 
