@@ -372,7 +372,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                     caller_file_path: match get_pathbuf_from_filename_struct(&source_file.name) {
                         Ok(pathbuf) => Some(pathbuf),
                         Err(err_msg) => {
-                            eprintln!("Error while initializing CallSiteMetadata: {}", err_msg);
+                            eprintln!("Error while locating caller_file_path (lookup_line success): {}", err_msg);
                             None
                         }
                     },
@@ -393,7 +393,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                     caller_file_path: match get_pathbuf_from_filename_struct(&source_file_only.name) {
                         Ok(pathbuf) => Some(pathbuf),
                         Err(err_msg) => {
-                            eprintln!("Error while initializing CallSiteMetadata: {}", err_msg);
+                            eprintln!("Error while locating caller_file_path (lookup_line error): {}", err_msg);
                             None
                         }
                     },
