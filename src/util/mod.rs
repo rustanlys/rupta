@@ -33,6 +33,8 @@ pub mod unsafe_statistics;
 /// If the rust compiler was compiled and installed in some other way, for example from a source
 /// enlistment, then the `RUST_SYSROOT` variable must be set in the environment from which rust-pta
 /// is compiled.
+/// 简而言之，如果工具链是通过rustup安装的，那么利用环境变量$RUSTUP_HOME和$RUSTUP_TOOLCHAIN合成出sysroot。
+/// 否则，尝试直接读取环境变量$RUST_SYSROOT的值。还不行，就开摆。
 pub fn find_sysroot() -> String {
     let home = option_env!("RUSTUP_HOME");
     let toolchain = option_env!("RUSTUP_TOOLCHAIN");
@@ -82,7 +84,7 @@ pub fn is_std_lib_func(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
     }
 }
 
-/// Returns true if the function has an explicit `self` (either `self` or `&(mut) self`) as its first 
+/// Returns true if the function has an explicit `self` (either `self` or `&(mut) self`) as its first
 /// parameter, allowing method calls.
 #[inline]
 pub fn has_self_parameter(tcx: TyCtxt<'_>, def_id: DefId) -> bool {

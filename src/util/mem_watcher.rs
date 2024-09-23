@@ -37,6 +37,8 @@ pub struct Statm {
     pub data: usize,
 }
 
+/// 追踪分析开始时的内存占用、分析过程中的最大内存占用。
+/// ? 还有一个奇怪的线程Handle作用不明？
 pub struct MemoryWatcher {
     init_resident: usize,
     max_resident: Arc<Mutex<usize>>,
@@ -54,6 +56,7 @@ impl Default for MemoryWatcher {
 }
 
 impl MemoryWatcher {
+    /// 尝试获取当前内存占用，并存储到自身。若获取不到，则假设当前内存占用为0。
     pub fn new() -> Self {
         if let Ok(statm) = statm_self() {
             MemoryWatcher {
@@ -81,7 +84,7 @@ impl MemoryWatcher {
             thread::sleep(std::time::Duration::from_millis(100));
         }));
     }
- 
+
     pub fn stop(&mut self) {
         if let Some(handle) = self.handle.take() {
             drop(handle);
@@ -130,7 +133,7 @@ fn parse_usize(input: &str) -> IResult<&str, usize> {
 }
 
 /// Parses the statm file format.
-/// 
+///
 /// The columns in the statm file include: size resident shared text lib data dt
 fn parse_statm(input: &str) -> IResult<&str, Statm> {
     tuple(
@@ -148,7 +151,7 @@ fn parse_statm(input: &str) -> IResult<&str, Statm> {
 
 /// Parses the provided statm file.
 fn statm_file(file: &mut File) -> Result<Statm> {
-    let mut buf = String::new(); 
+    let mut buf = String::new();
     file.read_to_string(&mut buf).expect("Unable to read string");
     map_result(parse_statm(&buf.trim()))
 }

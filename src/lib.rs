@@ -8,7 +8,7 @@
     box_patterns,              // for conciseness
     associated_type_defaults,  // for crate::indexed::Indexed
     min_specialization,        // for rustc_index::newtype_index
-    type_alias_impl_trait,     // for impl Trait in trait definition, eg crate::mir::utils 
+    type_alias_impl_trait,     // for impl Trait in trait definition, eg crate::mir::utils
     trait_alias,
 )]
 #![allow(
@@ -38,3 +38,4 @@ pub mod mir;
 pub mod pta;
 pub mod pts_set;
 pub mod util;
+pub mod info_collector;

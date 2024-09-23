@@ -2,8 +2,8 @@
 
 > :warning: [Documentation for RUPTA] is under development.
 
-This open-source framework, RUPTA, supports pointer/alias analysis for Rust, operating on Rust MIR. It currently offers callsite-based pointer analysis, 
-as detailed in our CC'24 paper (https://dl.acm.org/doi/10.1145/3640537.3641574). 
+This open-source framework, RUPTA, supports pointer/alias analysis for Rust, operating on Rust MIR. It currently offers callsite-based pointer analysis,
+as detailed in our CC'24 paper (https://dl.acm.org/doi/10.1145/3640537.3641574).
 ## Requirements
 
 * Rust nightly and components, as specified in [rust-toolchain](rust-toolchain.toml).
@@ -13,13 +13,13 @@ as detailed in our CC'24 paper (https://dl.acm.org/doi/10.1145/3640537.3641574).
 1. Clone the repository
 
 2. Build & install
-    
-    You can build RUPTA in two different ways:    
+
+    You can build RUPTA in two different ways:
 
     ```sh
     $ cargo build
     ```
-    
+
     This command generates two binaries, `cargo-pta` and `pta`, in the `target/debug` directory.
 
     You can also install RUPTA into `cargo`:
@@ -27,9 +27,9 @@ as detailed in our CC'24 paper (https://dl.acm.org/doi/10.1145/3640537.3641574).
     ```sh
     $ cargo --locked install --path .
     ```
-    
+
     This enables you to perform pointer analysis on a Rust project using the command `cargo pta`, similar to other `cargo` commands such as `cargo fmt`.
-    
+
 
 ## Usage
 
@@ -42,7 +42,7 @@ $ cargo-pta pta -- --entry <entry-function-name> --pta-type <pta-type> --context
 You can also use the command `cargo pta` instead of `cargo-pta pta` if RUPTA has been installed into `cargo`.
 
 Alternatively, you can run RUPTA for **a single file** using the binary `pta`:
-    
+
 ```sh
 $ pta <path-to-file> --entry <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-pts <pts-path>
 ```
@@ -71,7 +71,7 @@ $ export PTA_LOG=info
 If you encounter errors loading shared libraries, such as `librustc_driver.so`, try setting:
 
 ```sh
-$ export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib:$LD_LIBRARY_PATH
 ```
 
 ## License
