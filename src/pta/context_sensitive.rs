@@ -351,7 +351,14 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         // rustc_middle::mir::Location可配合tcx找到span
         let call_location = callsite.location;
         let caller_mir = self.acx.tcx.optimized_mir(caller_def_id);
-        let call_span = caller_mir.source_info(call_location).span;
+        // let call_span = caller_mir.source_info(call_location).span;
+        // ! 之前的call_span的获得方法有问题，现在好了
+        let call_block = &caller_mir.basic_blocks[call_location.block];
+        let call_span = if call_location.statement_index < call_block.statements.len() {
+            call_block.statements[call_location.statement_index].source_info.span
+        } else {
+            call_block.terminator().source_info.span
+        };
         let source_map = self.acx.tcx.sess.source_map();
         let callsite_metadata = match source_map.lookup_line(call_span.lo()) {
             Ok(source_and_line) => {
