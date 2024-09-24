@@ -27,9 +27,10 @@ impl Hash for CrateMetadata {
 }
 
 impl CrateMetadata {
-    pub fn new(manifest_path: &str) -> Self {
+    pub fn new(manifest_path: &str, working_dir: &std::path::PathBuf) -> Self {
         let mut cmd = MetadataCommand::new();
         cmd.manifest_path(manifest_path);
+        cmd.current_dir(working_dir); // default to current directory
 
         let metadata = cmd.exec().unwrap();
         Self {

@@ -512,7 +512,14 @@ let call_location = callsite.location;
 // 需要获得caller的mir
 let caller_mir = self.acx.tcx.optimized_mir(caller_def_id);
 // 利用mir获得callsite的位置
-let call_span = caller_mir.source_info(call_location).span;
+// let call_span = caller_mir.source_info(call_location).span;
+// ! 之前的call_span的获得方法有问题，现在好了
+let call_block = &caller_mir.basic_blocks[call_location.block];
+let call_span = if call_location.statement_index < call_block.statements.len() {
+    call_block.statements[call_location.statement_index].source_info.span
+} else {
+    call_block.terminator().source_info.span
+};
 // 为获得行号信息，需要一个source_map
 let source_map = self.acx.tcx.sess.source_map();
 // match一下两种情况，Ok就是又有文件路径又有行号，Err就是只有文件路径（估计还是虚拟路径）

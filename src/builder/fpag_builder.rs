@@ -27,10 +27,7 @@ use rustc_target::abi::FieldIdx;
 use crate::builder::{call_graph_builder, special_function_handler};
 use crate::graph::func_pag::FuncPAG;
 use crate::graph::pag::PAGEdgeEnum;
-use crate::info_collector::{
-    get_cargo_toml_path_from_source_file_path_buf, get_pathbuf_from_filename_struct, CrateMetadata,
-    FuncMetadata,
-};
+use crate::info_collector::FuncMetadata;
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::call_site::CallSite;
 use crate::mir::function::{FuncId, FunctionReference};
@@ -72,59 +69,63 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         let func_ref = acx.get_function_reference(func_id);
         debug!("Building FuncPAG for {:?}: {}", func_id, func_ref.to_string());
 
-        //? 让我康康在DefId上能折腾出什么名堂来
-        let cur_tcx = &acx.tcx;
-        // 获取一些关于当前函数DefId和所属crate的信息
         let def_id_of_func = func_ref.def_id;
+
+        //? 让我康康在DefId上能折腾出什么名堂来
+        //? 以下的步骤全部移动到FuncMetadata::from_info()里了
+        // let cur_tcx = &acx.tcx;
+        // 获取一些关于当前函数DefId和所属crate的信息
         // let crate_index_num = def_id_of_func.krate;
         // 有crate的名字，但是没有版本号
         // let crate_name = cur_tcx.crate_name(crate_index_num);
         // 让我看看当前编译会话里能榨出点啥
-        let cur_session = acx.tcx.sess;
-        let source_map = cur_session.source_map();
-        let span = cur_tcx.def_span(def_id_of_func);
-        let file = source_map.lookup_source_file(span.lo());
-        let line_num = if let Ok(file_and_line) = source_map.lookup_line(span.lo()) {
-            // assert_eq!(file_and_line.sf.name, file.name);
-            file_and_line.line
-        } else {
-            0
-        };
+        // let cur_session = acx.tcx.sess;
+        // let source_map = cur_session.source_map();
+        // let span = cur_tcx.def_span(def_id_of_func);
+        // let file = source_map.lookup_source_file(span.lo());
+        // let line_num = if let Ok(file_and_line) = source_map.lookup_line(span.lo()) {
+        //     // assert_eq!(file_and_line.sf.name, file.name);
+        //     file_and_line.line
+        // } else {
+        //     0
+        // };
 
         // 沃趣，找到了这个函数定义在哪个文件里头！！！！
         // Real(Remapped { local_path: Some("/home/endericedragon/.rustup/toolchains/nightly-2024-02-03-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/range.rs"), virtual_name: "/rustc/bf3c6c5bed498f41ad815641319a1ad9bcecb8e8/library/core/src/ops/range.rs" })
         // Real(LocalPath("/home/endericedragon/playground/example_crate/fastrand-2.1.0/src/lib.rs"))
         // 枚举的完整类型定义于rustc_span/src/lib.rs
-        let filename = &file.name;
-        let source_file_path = get_pathbuf_from_filename_struct(filename);
+        // let filename = &file.name;
+        // let source_file_path = get_pathbuf_from_filename_struct(filename);
 
-        let manifest_path = match &source_file_path {
-            Ok(path_buf) => get_cargo_toml_path_from_source_file_path_buf(&path_buf),
-            Err(message) => Err(message.to_owned()),
-        };
+        // let manifest_path = match &source_file_path {
+        //     Ok(path_buf) => get_cargo_toml_path_from_source_file_path_buf(&path_buf),
+        //     Err(message) => Err(message.to_owned()),
+        // };
 
-        let crate_metadata_usize = if let Some(crate_metadata) = match manifest_path {
-            Ok(path) => Some(CrateMetadata::new(&path)),
+        // let crate_metadata_usize = if let Some(crate_metadata) = match manifest_path {
+        //     Ok(path) => Some(CrateMetadata::new(&path)),
 
-            Err(message) => {
-                eprintln!("Error: {}", message);
-                None
-            }
-        } {
-            Some(acx.overall_metadata.crate_metadata.insert(crate_metadata))
-        } else {
-            None
-        };
+        //     Err(message) => {
+        //         eprintln!("Error: {}", message);
+        //         None
+        //     }
+        // } {
+        //     Some(acx.overall_metadata.crate_metadata.insert(crate_metadata))
+        // } else {
+        //     None
+        // };
 
-        let func_metadata = FuncMetadata::new(
-            def_id_of_func,
-            match source_file_path {
-                Ok(path_buf) => Some(path_buf),
-                _ => None,
-            },
-            line_num,
-            crate_metadata_usize,
-        );
+        // let func_metadata = FuncMetadata::new(
+        //     def_id_of_func,
+        //     match source_file_path {
+        //         Ok(path_buf) => Some(path_buf),
+        //         _ => None,
+        //     },
+        //     line_num,
+        //     crate_metadata_usize,
+        // );
+
+        let func_metadata = FuncMetadata::from_info(acx, def_id_of_func);
 
         acx.overall_metadata.func_metadata.insert(func_metadata);
         //? 折腾结束，您继续

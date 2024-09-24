@@ -75,6 +75,8 @@ pub struct AnalysisContext<'tcx, 'compilation> {
 
     /// 存储所有元数据
     pub overall_metadata: OverallMetadata,
+    /// 工作目录
+    pub working_dir: std::path::PathBuf,
 }
 
 impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
@@ -141,6 +143,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
                 concretized_heap_objs: HashMap::new(),
                 known_names_cache: KnownNamesCache::create_cache_from_language_items(),
                 overall_metadata: OverallMetadata::default(),
+                working_dir: std::env::current_dir().unwrap(),
             })
         } else {
             error!("Entry point not found");

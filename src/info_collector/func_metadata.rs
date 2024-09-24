@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use serde::{ser::SerializeStruct, Serialize};
 
+use crate::mir::analysis_context;
+
 /// 存放一个函数或方法的元数据。
 /// 包含该函数或方法的def_id，以及该函数或方法在源代码中的文件路径和行号。
 /// 除此以外，还有该函数所属的crate的元数据。
@@ -26,6 +28,54 @@ impl FuncMetadata {
             line_num: line_num,
             crate_metadata_idx,
         }
+    }
+
+    pub fn from_info(acx: &mut analysis_context::AnalysisContext, def_id_of_func: rustc_hir::def_id::DefId) -> Self {
+        let cur_session = acx.tcx.sess;
+        let source_map = cur_session.source_map();
+        let span = acx.tcx.def_span(def_id_of_func);
+        let file = source_map.lookup_source_file(span.lo());
+        let line_num = if let Ok(file_and_line) = source_map.lookup_line(span.lo()) {
+            // assert_eq!(file_and_line.sf.name, file.name);
+            file_and_line.line
+        } else {
+            0
+        };
+
+        // 沃趣，找到了这个函数定义在哪个文件里头！！！！
+        // Real(Remapped { local_path: Some("/home/endericedragon/.rustup/toolchains/nightly-2024-02-03-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/range.rs"), virtual_name: "/rustc/bf3c6c5bed498f41ad815641319a1ad9bcecb8e8/library/core/src/ops/range.rs" })
+        // Real(LocalPath("/home/endericedragon/playground/example_crate/fastrand-2.1.0/src/lib.rs"))
+        // 枚举的完整类型定义于rustc_span/src/lib.rs
+        let filename = &file.name;
+        let source_file_path = super::get_pathbuf_from_filename_struct(filename);
+
+        let manifest_path = match &source_file_path {
+            Ok(path_buf) => super::get_cargo_toml_path_from_source_file_path_buf(&path_buf),
+            Err(message) => Err(message.to_owned()),
+        };
+
+        let crate_metadata_idx = if let Some(crate_metadata) = match manifest_path {
+            Ok(path) => Some(super::CrateMetadata::new(&path, &acx.working_dir)),
+
+            Err(message) => {
+                eprintln!("Error: {}", message);
+                None
+            }
+        } {
+            Some(acx.overall_metadata.crate_metadata.insert(crate_metadata))
+        } else {
+            None
+        };
+
+        FuncMetadata::new(
+            def_id_of_func,
+            match source_file_path {
+                Ok(path_buf) => Some(path_buf),
+                _ => None,
+            },
+            line_num,
+            crate_metadata_idx,
+        )
     }
 }
 
