@@ -15,14 +15,15 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+use crate::info_collector::OverallMetadata;
+use crate::mir::call_site::{BaseCallSite, CalleeIdentifier};
 use crate::mir::function::{FuncId, FunctionReference, GenericArgE};
 use crate::mir::known_names::{KnownNames, KnownNamesCache};
 use crate::mir::path::Path;
+use crate::mir::path::{PathEnum, ProjectionElems};
 use crate::util;
 use crate::util::options::AnalysisOptions;
-use crate::util::type_util::{self, FieldByteOffsetCache, TypeCache, PointerProjectionsCache, PathCastCache};
-use crate::mir::call_site::{BaseCallSite, CalleeIdentifier};
-use crate::mir::path::{PathEnum, ProjectionElems};
+use crate::util::type_util::{self, FieldByteOffsetCache, PathCastCache, PointerProjectionsCache, TypeCache};
 
 /// Global information of the analysis
 pub struct AnalysisContext<'tcx, 'compilation> {
@@ -40,7 +41,7 @@ pub struct AnalysisContext<'tcx, 'compilation> {
 
     pub functions: IndexVec<FuncId, Rc<FunctionReference<'tcx>>>,
     pub func_id_map: HashMap<Rc<FunctionReference<'tcx>>, FuncId>,
-    pub func_name_cache: HashMap<FuncId, Box<str>>, 
+    pub func_name_cache: HashMap<FuncId, Box<str>>,
 
     /// Provides a way to refer to a  `rustc_middle::ty::Ty` via a handle that does not have
     /// a life time specifier.
@@ -71,9 +72,15 @@ pub struct AnalysisContext<'tcx, 'compilation> {
     pub(crate) aux_local_indexer: HashMap<FuncId, usize>,
 
     pub known_names_cache: KnownNamesCache,
+
+    /// 存储所有元数据
+    pub overall_metadata: OverallMetadata,
+    /// 工作目录
+    pub working_dir: std::path::PathBuf,
 }
 
 impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
+    /// 想方设法地找到入口函数（因为这是构造自身所必须的），然后构造自身。
     pub fn new(
         session: &'compilation Session,
         tcx: TyCtxt<'tcx>,
@@ -112,7 +119,10 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
 
         if let Some(entry_def_id) = entry_fn_def_id {
             let entry_name = tcx.item_name(entry_def_id);
+            // Entry Point: "main", DefId: DefId(0:4 ~ example_crate[6a34]::main)
             info!("Entry Point: {:?}, DefId: {:?}", entry_name, entry_def_id);
+            // tcx.def_path_str = main
+            info!("tcx.def_path_str = {}", tcx.def_path_str(entry_def_id));
             Some(Self {
                 tcx,
                 session,
@@ -132,6 +142,8 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
                 aux_local_indexer: HashMap::new(),
                 concretized_heap_objs: HashMap::new(),
                 known_names_cache: KnownNamesCache::create_cache_from_language_items(),
+                overall_metadata: OverallMetadata::default(),
+                working_dir: std::env::current_dir().unwrap(),
             })
         } else {
             error!("Entry point not found");
@@ -197,10 +209,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
     pub fn cast_to(&mut self, path: &Rc<Path>, ty: Ty<'tcx>) -> Option<Rc<Path>> {
         let mut path_cast_cache = std::mem::take(&mut self.path_cast_cache);
         let res = path_cast_cache.cast_to(self, path, ty);
-        std::mem::swap(
-            &mut self.path_cast_cache,
-            &mut path_cast_cache,
-        );
+        std::mem::swap(&mut self.path_cast_cache, &mut path_cast_cache);
         res
     }
 
@@ -208,10 +217,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
     pub fn get_type_variant(&mut self, path: &Rc<Path>, ty: Ty<'tcx>) -> Option<Rc<Path>> {
         let mut path_cast_cache = std::mem::take(&mut self.path_cast_cache);
         let res = path_cast_cache.get_type_variant(self, path, ty);
-        std::mem::swap(
-            &mut self.path_cast_cache,
-            &mut path_cast_cache,
-        );
+        std::mem::swap(&mut self.path_cast_cache, &mut path_cast_cache);
         res
     }
 
@@ -241,6 +247,7 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         match self.func_id_map.entry(func_ref.clone()) {
             Entry::Occupied(o) => o.get().to_owned(),
             Entry::Vacant(v) => {
+                // 可见这个id: FuncId其实就是这个func_ref在self.functions中的索引
                 let id = self.functions.push(func_ref.clone());
                 self.func_name_cache
                     .insert(id, func_ref.to_string().into_boxed_str());
@@ -269,7 +276,12 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         self.get_or_add_function_reference(func_ref)
     }
 
-    pub fn add_dyn_callsite(&mut self, callsite: BaseCallSite, callee_id: DefId, gen_args: GenericArgsRef<'tcx>) {
+    pub fn add_dyn_callsite(
+        &mut self,
+        callsite: BaseCallSite,
+        callee_id: DefId,
+        gen_args: GenericArgsRef<'tcx>,
+    ) {
         self.dyn_callsite_cache.insert(callsite, (callee_id, gen_args));
     }
 
@@ -323,6 +335,4 @@ impl<'tcx, 'compilation> AnalysisContext<'tcx, 'compilation> {
         self.aux_local_indexer.insert(func_id, aux_local_index + 1);
         aux
     }
-
 }
-
