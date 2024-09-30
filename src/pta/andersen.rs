@@ -114,7 +114,9 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         let edges_iter = fpag.internal_edges_iter();
         for (src, dst, kind) in edges_iter {
             if let Some(edge_id) = self.pag.add_edge(src, dst, kind.clone()) {
-                self.add_page_edge_func(edge_id, func_id);
+                if src.is_promoted_constant() || src.is_static_variable() {
+                    self.inter_proc_edges_queue.push(edge_id);
+                }
             }
         }
 

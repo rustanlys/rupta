@@ -144,7 +144,9 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
             let cs_src = self.mk_cs_path(src, func.cid);
             let cs_dst = self.mk_cs_path(dst, func.cid);
             if let Some(edge_id) = self.pag.add_edge(&cs_src, &cs_dst, kind.clone()) {
-                self.add_page_edge_func(edge_id, func);
+                if cs_src.path.is_promoted_constant() || cs_src.path.is_static_variable() {
+                    self.inter_proc_edges_queue.push(edge_id);
+                }
             }
         }
 
