@@ -12,8 +12,10 @@ use std::rc::Rc;
 
 use crate::mir::call_site::{BaseCallSite, CSCallSite};
 use crate::mir::context::{Context, ContextCache, ContextElement, ContextId, HybridCtxElem};
+use crate::mir::function::FuncId;
 use crate::mir::path::{CSPath, Path};
 use crate::rustc_index::Idx;
+use super::stack_filtering::{StackFilter, SFReachable};
 
 pub trait ContextStrategy {
     type E: ContextElement;
@@ -23,6 +25,10 @@ pub trait ContextStrategy {
     fn get_context_by_id(&self, context_id: ContextId) -> Rc<Context<Self::E>>;
     fn new_instance_call_context(&mut self, callsite: &Rc<CSCallSite>, receiver: Option<&Rc<CSPath>>) -> Option<ContextId>;
     fn new_static_call_context(&mut self, callsite: &Rc<CSCallSite>) -> ContextId;
+    fn with_stack_filter<F: SFReachable>(&mut self, _stack_filter: &mut StackFilter<F>) 
+    where 
+        F: Copy + Into<FuncId> + std::cmp::Eq + std::hash::Hash, 
+    {}
 }
 
 pub struct ContextInsensitive {}
@@ -108,6 +114,13 @@ impl ContextStrategy for KCallSiteSensitive {
 
     fn new_static_call_context(&mut self, callsite: &Rc<CSCallSite>) -> ContextId {
         self.new_context(callsite)
+    }
+
+    fn with_stack_filter<F: SFReachable>(&mut self, stack_filter: &mut StackFilter<F>) 
+    where 
+        F: Copy + Into<FuncId> + std::cmp::Eq + std::hash::Hash,
+    {
+        stack_filter.with_kcs_context_strategy(self);
     }
 }
 

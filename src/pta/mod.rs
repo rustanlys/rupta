@@ -4,13 +4,15 @@
 // LICENSE file in the root directory of this source tree.
 
 use log::*;
+use std::time::Instant;
+
 use rustc_driver::Compilation;
 use rustc_interface::{interface, Queries};
 use rustc_middle::ty::TyCtxt;
 
 use self::andersen::AndersenPTA;
 use self::context_sensitive::ContextSensitivePTA;
-use self::context_strategy::KCallSiteSensitive;
+use self::strategies::context_strategy::KCallSiteSensitive;
 use crate::graph::pag::*;
 use crate::mir::function::FuncId;
 use crate::mir::analysis_context::AnalysisContext;
@@ -20,9 +22,9 @@ use crate::util::mem_watcher::MemoryWatcher;
 use crate::util::options::AnalysisOptions;
 
 pub mod andersen;
-pub mod context_strategy;
 pub mod context_sensitive;
 pub mod propagator;
+pub mod strategies;
 
 pub type NodeId = PAGNodeId;
 pub type EdgeId = PAGEdgeId;
@@ -36,7 +38,32 @@ pub enum PTAType {
 }
 
 pub trait PointerAnalysis<'tcx, 'compilation> {
-    fn analyze(&mut self);
+    fn pre_analysis(&mut self) {}
+    // Initialization for the analysis.
+    fn initialize(&mut self);
+    // Solve the worklist problem.
+    fn propagate(&mut self);
+    // Finalize the analysis.
+    fn finalize(&self);
+
+    fn analyze(&mut self) {
+        self.pre_analysis();
+
+        // Main analysis phase
+        let now = Instant::now();
+
+        self.initialize();
+        self.propagate();
+        
+        let elapsed = now.elapsed();
+        println!("Pointer analysis completed.");
+        println!(
+            "Analysis time: {}",
+            humantime::format_duration(elapsed).to_string()
+        );
+
+        self.finalize();
+    }
 }
 
 pub struct PTACallbacks {
@@ -66,14 +93,14 @@ impl PTACallbacks {
                         ContextSensitivePTA::new(
                             &mut acx, 
                             KCallSiteSensitive::new(self.options.context_depth as usize)
-                            ),
+                        ),
                     )
                 }
                 PTAType::Andersen => Box::new(AndersenPTA::new(&mut acx)),
             };
             pta.analyze();
         } else {
-            error!("GlobalContext Initialization Failed");
+            error!("AnalysisContext Initialization Failed");
         }
 
         mem_watcher.stop();

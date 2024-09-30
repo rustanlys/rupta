@@ -6,13 +6,13 @@
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter, Result};
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::Duration;
 
-use log::*;
 use rustc_middle::ty::TyCtxt;
 
 use super::propagator::propagator::Propagator;
 use super::PointerAnalysis;
+use super::strategies::stack_filtering::StackFilter;
 use crate::graph::call_graph::CallGraph;
 use crate::graph::func_pag::FuncPAG;
 use crate::mir::call_site::{CallSite, BaseCallSite, CallType, AssocCallGroup};
@@ -20,6 +20,7 @@ use crate::mir::function::FuncId;
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::path::Path;
 use crate::pta::*;
+use crate::rta::rta::RapidTypeAnalysis;
 use crate::util::chunked_queue;
 use crate::util::pta_statistics::AndersenStat;
 use crate::util::results_dumper;
@@ -48,6 +49,9 @@ pub struct AndersenPTA<'pta, 'tcx, 'compilation> {
     inter_proc_edges_queue: chunked_queue::ChunkedQueue<EdgeId>,
 
     assoc_calls: AssocCallGroup<NodeId, FuncId, Rc<Path>>,
+
+    pub stack_filter: Option<StackFilter<FuncId>>,
+    pub pre_analysis_time: Duration,
 }
 
 impl<'pta, 'compilation, 'tcx> Debug for AndersenPTA<'pta, 'compilation, 'tcx> {
@@ -73,6 +77,8 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
             addr_edge_iter,
             inter_proc_edges_queue: chunked_queue::ChunkedQueue::new(),
             assoc_calls: AssocCallGroup::new(),
+            stack_filter: None,
+            pre_analysis_time: Duration::ZERO,
         }
     }
 
@@ -81,49 +87,14 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         self.acx.tcx
     }
 
-    /// Initialize the analysis.
-    pub fn initialize(&mut self) {
-        // add the entry point to the call graph
-        let entry_point = self.acx.entry_point;
-        let entry_func_id = self.acx.get_func_id(entry_point, self.tcx().mk_args(&[]));
-        self.call_graph.add_node(entry_func_id);
-
-        // process statements of reachable functions
-        self.process_reach_funcs();
-    }
-
-    /// Solve the worklist problem using Propagator.
-    pub fn propagate(&mut self) {
-        let mut iter_proc_edge_iter = self.inter_proc_edges_queue.iter_copied();
-        // Solve until no new call relationship is found.
-        loop {
-            let mut new_calls: Vec<(Rc<CallSite>, FuncId)> = Vec::new();
-            let mut new_call_instances: Vec<(Rc<CallSite>, Rc<Path>, FuncId)> = Vec::new();
-            let mut propagator = Propagator::new(
-                self.acx,
-                &mut self.pt_data,
-                &mut self.pag,
-                &mut new_calls,
-                &mut new_call_instances,
-                &mut self.addr_edge_iter,
-                &mut iter_proc_edge_iter,
-                &mut self.assoc_calls,
-            );
-            propagator.solve_worklist();
-
-            if new_calls.is_empty() && new_call_instances.is_empty() {
-                break;
-            } else {
-                self.process_new_calls(&new_calls);
-                self.process_new_call_instances(&new_call_instances);
-            }
-        }
-    }
-
     /// Process statements in reachable functions.
     fn process_reach_funcs(&mut self) {
         while let Some(func_id) = self.rf_iter.next() {
             if !self.processed_funcs.contains(&func_id) {
+                let func_ref = self.acx.get_function_reference(func_id);
+                info!(
+                    "Processing function {:?} {}", func_id, func_ref.to_string(),
+                );
                 if self.pag.build_func_pag(self.acx, func_id) {
                     self.add_fpag_edges(func_id);
                     self.process_calls_in_fpag(func_id);
@@ -142,7 +113,9 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         let fpag = unsafe { &*(self.pag.func_pags.get(&func_id).unwrap() as *const FuncPAG) };
         let edges_iter = fpag.internal_edges_iter();
         for (src, dst, kind) in edges_iter {
-            self.pag.add_edge(src, dst, kind.clone());
+            if let Some(edge_id) = self.pag.add_edge(src, dst, kind.clone()) {
+                self.add_page_edge_func(edge_id, func_id);
+            }
         }
 
         // add edges in the promoted functions
@@ -221,6 +194,13 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         let new_inter_proc_edges = self.pag.add_inter_procedural_edges(self.acx, callsite, *callee);
         for edge in new_inter_proc_edges {
             self.inter_proc_edges_queue.push(edge);
+            self.add_page_edge_func(edge, callsite.func);
+        }
+    }
+
+    fn add_page_edge_func(&mut self, edge: EdgeId, func: FuncId) {
+        if let Some(sf) = &mut self.stack_filter {
+            sf.add_pag_edge_in_func(edge, func);
         }
     }
 
@@ -229,8 +209,66 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         &self.pt_data
     }
 
+}
+
+impl<'pta, 'tcx, 'compilation> PointerAnalysis<'tcx, 'compilation> for AndersenPTA<'pta, 'tcx, 'compilation> {
+    fn pre_analysis(&mut self) {
+        if !self.acx.analysis_options.stack_filtering {
+            return;
+        }
+        info!("Start pre-analysis");
+        let mut rta = RapidTypeAnalysis::new(&mut self.acx);
+        rta.analyze();
+        self.pre_analysis_time += rta.analysis_time;
+        self.stack_filter = Some(StackFilter::new(rta.call_graph));
+        self.pre_analysis_time += self.stack_filter.as_ref().unwrap().fra_time();
+        println!("Pre-analysis time {}", 
+            humantime::format_duration(self.pre_analysis_time).to_string()
+        );
+    }
+
+    /// Initialize the analysis.
+    fn initialize(&mut self) {
+        // add the entry point to the call graph
+        let entry_point = self.acx.entry_point;
+        let entry_func_id = self.acx.get_func_id(entry_point, self.tcx().mk_args(&[]));
+        self.call_graph.add_node(entry_func_id);
+
+        // process statements of reachable functions
+        self.process_reach_funcs();
+    }
+
+    /// Solve the worklist problem using Propagator.
+    fn propagate(&mut self) {
+        let mut iter_proc_edge_iter = self.inter_proc_edges_queue.iter_copied();
+        // Solve until no new call relationship is found.
+        loop {
+            let mut new_calls: Vec<(Rc<CallSite>, FuncId)> = Vec::new();
+            let mut new_call_instances: Vec<(Rc<CallSite>, Rc<Path>, FuncId)> = Vec::new();
+            let mut propagator = Propagator::new(
+                self.acx,
+                &mut self.pt_data,
+                &mut self.pag,
+                &mut new_calls,
+                &mut new_call_instances,
+                &mut self.addr_edge_iter,
+                &mut iter_proc_edge_iter,
+                &mut self.assoc_calls,
+                self.stack_filter.as_mut(),
+            );
+            propagator.solve_worklist();
+
+            if new_calls.is_empty() && new_call_instances.is_empty() {
+                break;
+            } else {
+                self.process_new_calls(&new_calls);
+                self.process_new_call_instances(&new_call_instances);
+            }
+        }
+    }
+
     /// Finalize the analysis.
-    pub fn finalize(&self) {
+    fn finalize(&self) {
         // dump call graph, points-to results
         results_dumper::dump_results(self.acx, &self.call_graph, &self.pt_data, &self.pag);
 
@@ -238,27 +276,5 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
         let pta_stat = AndersenStat::new(self);
         pta_stat.dump_stats();
     }
-}
 
-impl<'pta, 'tcx, 'compilation> PointerAnalysis<'tcx, 'compilation> for AndersenPTA<'pta, 'tcx, 'compilation> {
-    /// Analyze the crate currently being compiled, using the information given in compiler and tcx.
-    fn analyze(&mut self) {
-        let now = Instant::now();
-
-        // Initialization for the analysis.
-        self.initialize();
-
-        // Solve the worklist problem.
-        self.propagate();
-
-        let elapsed = now.elapsed();
-        info!("Andersen completed.");
-        info!(
-            "Analysis time: {}",
-            humantime::format_duration(elapsed).to_string()
-        );
-
-        // Finalize the analysis.
-        self.finalize();
-    }
 }

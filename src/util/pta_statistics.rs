@@ -11,7 +11,7 @@ use std::rc::Rc;
 use crate::mir::path::Path;
 use crate::pta::andersen::AndersenPTA;
 use crate::pta::context_sensitive::ContextSensitivePTA;
-use crate::pta::context_strategy::ContextStrategy;
+use crate::pta::strategies::context_strategy::ContextStrategy;
 use crate::pts_set::points_to::PointsToSet;
 
 pub struct AndersenStat<'pta, 'tcx, 'compilation> {

@@ -6,25 +6,25 @@
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter, Result};
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::Duration;
 
 use itertools::Itertools;
 use log::*;
 use rustc_middle::ty::TyCtxt;
 
-use super::context_strategy::KObjectSensitive;
+use super::*;
+use super::strategies::context_strategy::{ContextStrategy, KObjectSensitive};
+use super::strategies::stack_filtering::StackFilter;
 use super::propagator::propagator::Propagator;
 use super::PointerAnalysis;
 use crate::graph::func_pag::FuncPAG;
-use crate::graph::pag::*;
 use crate::graph::call_graph::CSCallGraph;
 use crate::mir::call_site::{AssocCallGroup, CSCallSite, CallSite, CallType};
 use crate::mir::context::{Context, ContextId};
 use crate::mir::function::{FuncId, CSFuncId};
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::path::{Path, CSPath, PathEnum};
-use crate::pta::*;
-use crate::pta::context_strategy::ContextStrategy;
+use crate::rta::rta::RapidTypeAnalysis;
 use crate::util::pta_statistics::ContextSensitiveStat;
 use crate::util::{self, chunked_queue, results_dumper};
 
@@ -58,6 +58,9 @@ pub struct ContextSensitivePTA<'pta, 'tcx, 'compilation, S: ContextStrategy> {
     assoc_calls: AssocCallGroup<NodeId, CSFuncId, Rc<CSPath>>,
 
     ctx_strategy: S,
+
+    pub stack_filter: Option<StackFilter<CSFuncId>>,
+    pub pre_analysis_time: Duration,
 }
 
 impl<'pta, 'tcx, 'compilation, S: ContextStrategy> Debug for ContextSensitivePTA<'pta, 'tcx, 'compilation, S> {
@@ -84,6 +87,8 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
             inter_proc_edges_queue: chunked_queue::ChunkedQueue::new(),
             assoc_calls: AssocCallGroup::new(),
             ctx_strategy,
+            stack_filter: None,
+            pre_analysis_time: Duration::ZERO,
         }
     }
 
@@ -106,47 +111,6 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     pub fn get_empty_context_id(&mut self) -> ContextId {
         self.ctx_strategy.get_empty_context_id()
     }
-
-    /// Initialize the analysis.
-    pub fn initialize(&mut self) {
-        // add the entry point to the call graph
-        let entry_point = self.acx.entry_point;
-        let empty_context_id = self.get_empty_context_id();
-        let entry_func_id = self.acx.get_func_id(entry_point, self.tcx().mk_args(&[]));
-        self.call_graph.add_node(CSFuncId::new(empty_context_id, entry_func_id));
-
-        // process statements of reachable functions
-        self.process_reach_funcs();
-    }
-
-    /// Solve the worklist problem using Propagator.
-    pub fn propagate(&mut self) {
-        let mut iter_proc_edge_iter = self.inter_proc_edges_queue.iter_copied();
-        // Solve until no new call relationship is found.
-        loop {
-            let mut new_calls: Vec<(Rc<CSCallSite>, FuncId)> = Vec::new();
-            let mut new_call_instances: Vec<(Rc<CSCallSite>, Rc<CSPath>, FuncId)> = Vec::new();
-            let mut propagator = Propagator::new(
-                self.acx,
-                &mut self.pt_data,
-                &mut self.pag,
-                &mut new_calls,
-                &mut new_call_instances,
-                &mut self.addr_edge_iter,
-                &mut iter_proc_edge_iter,
-                &mut self.assoc_calls,
-            );
-            propagator.solve_worklist();
-
-            if new_calls.is_empty() && new_call_instances.is_empty() {
-                break;
-            } else {
-                self.process_new_calls(&new_calls);
-                self.process_new_call_instances(&new_call_instances);
-            }
-        }
-    }
-
     
     /// Process statements in reachable functions.
     fn process_reach_funcs(&mut self) {
@@ -179,7 +143,9 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         for (src, dst, kind) in edges_iter {
             let cs_src = self.mk_cs_path(src, func.cid);
             let cs_dst = self.mk_cs_path(dst, func.cid);
-            self.pag.add_edge(&cs_src, &cs_dst, kind.clone());
+            if let Some(edge_id) = self.pag.add_edge(&cs_src, &cs_dst, kind.clone()) {
+                self.add_page_edge_func(edge_id, func);
+            }
         }
 
         // add edges in the promoted functions
@@ -312,6 +278,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         let new_inter_proc_edges = self.pag.add_inter_procedural_edges(self.acx, callsite, *callee);
         for edge in new_inter_proc_edges {
             self.inter_proc_edges_queue.push(edge);
+            self.add_page_edge_func(edge, callsite.func);
         }
     }
 
@@ -361,19 +328,15 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         ))
     }
 
+    fn add_page_edge_func(&mut self, edge: EdgeId, func: CSFuncId) {
+        if let Some(sf) = &mut self.stack_filter {
+            sf.add_pag_edge_in_func(edge, func);
+        }
+    }
+
     #[inline]
     pub fn get_pt_data(&self) -> &DiffPTDataTy {
         &self.pt_data
-    }
-
-    /// Finalize the analysis.
-    pub fn finalize(&self) {
-        // dump call graph, points-to results
-        results_dumper::dump_results(self.acx, &self.call_graph, &self.pt_data, &self.pag);
-        
-        // dump pta statistics
-        let pta_stat = ContextSensitiveStat::new(self);
-        pta_stat.dump_stats();
     }
 
 }
@@ -381,26 +344,70 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
 impl<'pta, 'tcx, 'compilation, S: ContextStrategy> PointerAnalysis<'tcx, 'compilation>
     for ContextSensitivePTA<'pta, 'tcx, 'compilation, S>
 {
-    /// Analyze the crate currently being compiled, using the information given in compiler and tcx.
-    fn analyze(&mut self) {
-
-        let now = Instant::now();
-
-        // Initialization for the analysis.
-        self.initialize();
-
-        // Solve the worklist problem.
-        self.propagate();
-
-        let elapsed = now.elapsed();
-        info!("Context-sensitive PTA completed.");
-        info!(
-            "Analysis time: {}",
-            humantime::format_duration(elapsed).to_string()
+    fn pre_analysis(&mut self) {
+        if !self.acx.analysis_options.stack_filtering {
+            return;
+        }
+        info!("Start pre-analysis");
+        let mut rta = RapidTypeAnalysis::new(&mut self.acx);
+        rta.analyze();
+        self.pre_analysis_time += rta.analysis_time;
+        self.stack_filter = Some(StackFilter::new(rta.call_graph));
+        self.ctx_strategy.with_stack_filter(self.stack_filter.as_mut().unwrap());
+        self.pre_analysis_time += self.stack_filter.as_ref().unwrap().fra_time();
+        println!("Pre-analysis time {}", 
+            humantime::format_duration(self.pre_analysis_time).to_string()
         );
+    }
 
-        // Finalize the analysis.
-        self.finalize();
+    /// Initialize the analysis.
+    fn initialize(&mut self) {
+        // add the entry point to the call graph
+        let entry_point = self.acx.entry_point;
+        let empty_context_id = self.get_empty_context_id();
+        let entry_func_id = self.acx.get_func_id(entry_point, self.tcx().mk_args(&[]));
+        self.call_graph.add_node(CSFuncId::new(empty_context_id, entry_func_id));
 
+        // process statements of reachable functions
+        self.process_reach_funcs();
+    }
+
+    /// Solve the worklist problem using Propagator.
+    fn propagate(&mut self) {
+        let mut iter_proc_edge_iter = self.inter_proc_edges_queue.iter_copied();
+        // Solve until no new call relationship is found.
+        loop {
+            let mut new_calls: Vec<(Rc<CSCallSite>, FuncId)> = Vec::new();
+            let mut new_call_instances: Vec<(Rc<CSCallSite>, Rc<CSPath>, FuncId)> = Vec::new();
+            let mut propagator = Propagator::new(
+                self.acx,
+                &mut self.pt_data,
+                &mut self.pag,
+                &mut new_calls,
+                &mut new_call_instances,
+                &mut self.addr_edge_iter,
+                &mut iter_proc_edge_iter,
+                &mut self.assoc_calls,
+                self.stack_filter.as_mut(),
+            );
+            propagator.solve_worklist();
+
+            if new_calls.is_empty() && new_call_instances.is_empty() {
+                break;
+            } else {
+                self.process_new_calls(&new_calls);
+                self.process_new_call_instances(&new_call_instances);
+            }
+        }
+    }
+
+    /// Finalize the analysis.
+    fn finalize(&self) {
+        // dump call graph, points-to results
+        results_dumper::dump_results(self.acx, &self.call_graph, &self.pt_data, &self.pag);
+        
+        // dump pta statistics
+        let pta_stat = ContextSensitiveStat::new(self);
+        pta_stat.dump_stats();
     }
 }

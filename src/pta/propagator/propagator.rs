@@ -19,9 +19,9 @@ use crate::mir::call_site::{AssocCallGroup, CallSiteS};
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::path::{PathEnum, PathSelector};
 use crate::pta::*;
+use crate::pta::strategies::stack_filtering::{StackFilter, SFReachable};
 use crate::pts_set::points_to::PointsToSet;
 use crate::util::{self, chunked_queue, type_util};
-
 
 /// Propagating the points-to information along the PAG edges. 
 pub struct Propagator<'pta, 'tcx, 'compilation, F, P: PAGPath> {
@@ -68,10 +68,12 @@ pub struct Propagator<'pta, 'tcx, 'compilation, F, P: PAGPath> {
     worklist: VecDeque<NodeId>,
 
     assoc_calls: &'pta mut AssocCallGroup<NodeId, F, P>,
+
+    stack_filter: Option<&'pta mut StackFilter<F>>,
 }
 
 impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> where 
-    F: Copy + Into<FuncId> + std::cmp::Eq + std::hash::Hash,
+    F: Copy + Into<FuncId> + std::cmp::Eq + std::hash::Hash + SFReachable,
     P: PAGPath<FuncTy = F>,
 {
     /// Constructor
@@ -84,6 +86,7 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
         addr_edge_iter: &'pta mut chunked_queue::IterCopied<EdgeId>,
         inter_proc_edge_iter: &'pta mut chunked_queue::IterCopied<EdgeId>,
         assoc_calls: &'pta mut AssocCallGroup<NodeId, F, P>,
+        stack_filter: Option<&'pta mut StackFilter<F>>
     ) -> Self {
         Propagator {
             acx,
@@ -95,6 +98,7 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
             addr_edge_iter,
             inter_proc_edge_iter,
             assoc_calls,
+            stack_filter,
         }
     }
 
@@ -258,7 +262,12 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
     /// If there are some static instance calls on this node
     fn handle_static_dispatch_instance_call(&mut self, node_id: NodeId) {
         if self.assoc_calls.static_dispatch_instance_calls.contains_key(&node_id) {
-            let instance_callsites = self.assoc_calls.static_dispatch_instance_calls.get(&node_id).unwrap().clone();
+            let instance_callsites = self
+                .assoc_calls
+                .static_dispatch_instance_calls
+                .get(&node_id)
+                .unwrap()
+                .clone();
 
             if let Some(diff_pts) = self.get_diff_pts(node_id) {
                 let diff_pts = diff_pts.clone();
@@ -276,7 +285,12 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
     /// If this node is a dynamic trait object, add call edges for the dynamic calls.
     fn handle_dynamic_dispatch_call(&mut self, node_id: NodeId) {
         if self.assoc_calls.dynamic_dispatch_calls.contains_key(&node_id) {
-            let dyn_callsites = self.assoc_calls.dynamic_dispatch_calls.get(&node_id).unwrap().clone();
+            let dyn_callsites = self
+                .assoc_calls.
+                dynamic_dispatch_calls.
+                get(&node_id).
+                unwrap().
+                clone();
 
             if let Some(diff_pts) = self.get_diff_pts(node_id) {
                 let diff_pts = diff_pts.clone();
@@ -315,14 +329,22 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
     /// src --load--> dst:  node \in pts(src) ==> node --direct-->dst
     fn process_load(&mut self, load_edge: EdgeId, base_pts: &PointsTo<NodeId>) {
         let (_src, dst) = self.pag.graph().edge_endpoints(load_edge).unwrap();
-        let PAGEdgeEnum::LoadPAGEdge(load_proj) = self.pag.get_edge(load_edge).kind.clone() else { unreachable!() };
+        let PAGEdgeEnum::LoadPAGEdge(load_proj) = 
+            self.pag.get_edge(load_edge).kind.clone() else { unreachable!() };
+
+        let stack_filter_pred = Self::stack_filter_pred(load_edge);
         
         let dst_path = self.pag.node_path(dst).clone();
         for pointee in base_pts {
             let pointee_path = self.pag.node_path(pointee).clone();
             let src_path = pointee_path.append_projection(&load_proj);
 
+            if stack_filter_pred(self.acx, self.stack_filter.as_deref(), &pointee_path) {
+                continue;
+            }
+
             if let Some(edge_id) = self.add_direct_edge(&src_path, &dst_path) {
+                self.new_edge_from_store_or_load(edge_id, load_edge);
                 self.propagate(edge_id, false);
             }
         }
@@ -332,14 +354,23 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
     /// src --store--> dst:  node \in pts(dst) ==> src --direct--> node
     fn process_store(&mut self, store_edge: EdgeId, base_pts: &PointsTo<NodeId>) {
         let (src, _dst) = self.pag.graph().edge_endpoints(store_edge).unwrap();
-        let PAGEdgeEnum::StorePAGEdge(store_proj) = self.pag.get_edge(store_edge).kind.clone() else { unreachable!() };
+        let PAGEdgeEnum::StorePAGEdge(store_proj) = 
+            self.pag.get_edge(store_edge).kind.clone() else { unreachable!() };
+
+        let stack_filter_pred = Self::stack_filter_pred(store_edge);
         
         let src_path = self.pag.node_path(src).clone();
         for pointee in base_pts {
             let pointee_path = self.pag.node_path(pointee).clone();
+
+            if stack_filter_pred(self.acx, self.stack_filter.as_deref(), &pointee_path) {
+                continue;
+            }
+
             let dst_path = pointee_path.append_projection(&store_proj);
 
             if let Some(edge_id) = self.add_direct_edge(&src_path, &dst_path) {
+                self.new_edge_from_store_or_load(edge_id, store_edge);
                 self.propagate(edge_id, false);
             }
         }
@@ -348,13 +379,21 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
     /// Process the given gep edge.
     fn process_gep(&mut self, gep_edge: EdgeId, base_pts: &PointsTo<NodeId>) {
         let (_src, dst) = self.pag.graph().edge_endpoints(gep_edge).unwrap();
-        let PAGEdgeEnum::GepPAGEdge(gep_proj) = self.pag.get_edge(gep_edge).kind.clone() else { unreachable!() };
+        let PAGEdgeEnum::GepPAGEdge(gep_proj) = 
+            self.pag.get_edge(gep_edge).kind.clone() else { unreachable!() };
+
+        let stack_filter_pred = Self::stack_filter_pred(gep_edge);
         
         let mut changed = false;
         for pointee in base_pts {
             let pointee_path = self.pag.node_path(pointee).clone();
-            let src_path = pointee_path.append_projection(&gep_proj);
 
+            if stack_filter_pred(self.acx, self.stack_filter.as_deref(), &pointee_path) {
+                self.collect_filtered_pts(gep_edge, pointee);
+                continue;
+            }
+
+            let src_path = pointee_path.append_projection(&gep_proj);
             let src_id = self.pag.get_or_insert_node(&src_path);
             if self.add_pts(dst, src_id) {
                 changed = true;
@@ -672,6 +711,7 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
             // debug!("Propagating from {:?}({:?}) -> {:?}({:?})", src_path, src_type, dst_path, dst_type);
             
             let type_filter_pred = Self::type_filter_pred();
+            let stack_filter_pred = Self::stack_filter_pred(direct_edge);
 
             if !type_util::equivalent_ptr_types(self.tcx(), src_type, dst_type) {
                 debug!(
@@ -685,11 +725,15 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
             let dst_deref_type = type_util::get_dereferenced_type(dst_type);
             if let Some(diff) = self.pt_data.get_diff_pts(src) {
                 for pointee in &diff.clone() {
-                    let (_pointee_path, pointee_type) = self.node_path_and_ty(pointee);
+                    let (pointee_path, pointee_type) = self.node_path_and_ty(pointee);
                     if type_filter_pred(self.acx, pointee_type, src_deref_type, dst_deref_type) 
                     {   
                         continue;
                     } 
+                    if stack_filter_pred(self.acx, self.stack_filter.as_deref(), &pointee_path) {
+                        self.collect_filtered_pts(direct_edge, pointee);
+                        continue;
+                    }
 
                     changed |= self.add_pts(dst, pointee);
                 }
@@ -698,11 +742,15 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
             if !propa_diff {
                 if let Some(propa) = self.pt_data.get_propa_pts(src) {
                     for pointee in &propa.clone() {
-                        let (_pointee_path, pointee_type) = self.node_path_and_ty(pointee);
+                        let (pointee_path, pointee_type) = self.node_path_and_ty(pointee);
                         if type_filter_pred(self.acx, pointee_type, src_deref_type, dst_deref_type) 
                         {
                             continue;
                         }  
+                        if stack_filter_pred(self.acx, self.stack_filter.as_deref(), &pointee_path) {
+                            self.collect_filtered_pts(direct_edge, pointee);
+                            continue;
+                        }
 
                         changed |= self.add_pts(dst, pointee);
                     }
@@ -786,12 +834,19 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
             return;
         }
 
+        let stack_filter_pred = Self::stack_filter_pred(cast_edge);
+
         // Skip casts for certain cases that may significantly impact the efficiency
         if self.acx.analysis_options.cast_constraint && type_util::is_basic_pointer(src_ty) {
             for pointee in &src_pts {
                 let pointee_path = self.pag.node_path(pointee).clone();
                 // debug!("Pointee of source to be cast: {:?}", pointee_path);
                 let regularized_path = pointee_path.regularize(self.acx);
+
+                if stack_filter_pred(self.acx, self.stack_filter.as_deref(), &pointee_path) {
+                    self.collect_filtered_pts(cast_edge, pointee);
+                    continue;
+                }
 
                 // Perform cast if the pointee path has not been cast to any other type before
                 if !regularized_path.has_been_cast(self.acx) {
@@ -850,6 +905,11 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
         // let param_env = rustc_middle::ty::ParamEnv::reveal_all();
         for pointee in &src_pts {
             let pointee_path = self.pag.node_path(pointee).clone();
+            if stack_filter_pred(self.acx, self.stack_filter.as_deref(), &pointee_path) {
+                self.collect_filtered_pts(cast_edge, pointee);
+                continue;
+            }
+
             // debug!("Pointee of source to be cast: {:?}", pointee_path);
             if let Some(cast_path) = pointee_path.cast_to(self.acx, dst_deref_ty) {
                 let cast_path_id = self.pag.get_or_insert_node(&cast_path);
@@ -1082,6 +1142,35 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
                 true
             } else {
                 false
+            }
+        }
+    }
+
+    fn stack_filter_pred(edge_id: EdgeId) -> impl Fn(&AnalysisContext<'_, '_>, Option<&StackFilter<F>>, &P) -> bool {
+        move |acx:&AnalysisContext, stack_filter: Option<&StackFilter<F>>, pointee: &P| -> bool {
+            if !acx.analysis_options.stack_filtering {
+                return false;
+            } 
+            if let Some(sf) = stack_filter  {
+                if let Some(&edge_func) = sf.get_container_func_of_edge(&edge_id) {
+                    return !sf.is_potentially_alive(acx, edge_func, pointee);
+                } 
+            } 
+
+            return false;
+        }
+    }
+
+    fn collect_filtered_pts(&mut self, edge_id: EdgeId, filtered_pointee: NodeId) {
+        if let Some(sf) = &mut self.stack_filter {
+            sf.collect_filtered_pts(edge_id, filtered_pointee);
+        }
+    }
+
+    fn new_edge_from_store_or_load(&mut self, new_edge: EdgeId, store_load_edge: EdgeId) {
+        if let Some(sf) = &mut self.stack_filter {
+            if let Some(func) = sf.get_container_func_of_edge(&store_load_edge) {
+                sf.add_pag_edge_in_func(new_edge, *func);
             }
         }
     }

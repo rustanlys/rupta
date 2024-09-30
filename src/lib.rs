@@ -36,5 +36,6 @@ pub mod builder;
 pub mod graph;
 pub mod mir;
 pub mod pta;
+pub mod rta;
 pub mod pts_set;
 pub mod util;
