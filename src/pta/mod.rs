@@ -23,7 +23,8 @@ pub mod andersen;
 pub mod context_strategy;
 pub mod context_sensitive;
 pub mod propagator;
-mod flow_sensitive;
+pub mod flow_strategy;
+pub mod flow_sensitive;
 
 pub type NodeId = PAGNodeId;
 pub type EdgeId = PAGEdgeId;

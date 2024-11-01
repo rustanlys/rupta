@@ -3,11 +3,12 @@ use std::fmt::{Debug, Formatter, Result};
 use std::rc::Rc;
 use std::time::Instant;
 
+use flow_strategy::FlowStrategy;
 use itertools::Itertools;
 use log::*;
 use rustc_middle::ty::TyCtxt;
 
-use super::context_strategy::KObjectSensitive;
+
 use super::propagator::propagator::Propagator;
 use super::PointerAnalysis;
 use crate::graph::func_pag::FuncPAG;
@@ -19,12 +20,10 @@ use crate::mir::function::{FuncId, CSFuncId};
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::path::{Path, CSPath, PathEnum};
 use crate::pta::*;
-use crate::pta::context_strategy::ContextStrategy;
-use crate::util::pta_statistics::ContextSensitiveStat;
 use crate::util::{self, chunked_queue, results_dumper};
 
 
-pub struct FlowSensitvePTA<'pta, 'tcx, 'compilation, S: ContextStrategy> {
+pub struct FlowSensitvePTA<'pta, 'tcx, 'compilation, S: FlowStrategy> {
     /// The analysis context
     pub(crate) acx: &'pta mut AnalysisContext<'tcx, 'compilation>,
     /// Points-to data
@@ -32,7 +31,7 @@ pub struct FlowSensitvePTA<'pta, 'tcx, 'compilation, S: ContextStrategy> {
     /// Pointer Assignment Graph
     pub(crate) pag: PAG<Rc<CSPath>>,
     /// Call graph
-    pub call_graph: CSCallGraph,
+    pub call_graphs: Vec<CSCallGraph>,
 
     /// Records the functions that have been processed
     pub(crate) processed_funcs: HashSet<CSFuncId>,
