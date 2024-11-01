@@ -31,7 +31,7 @@ pub struct FlowSensitvePTA<'pta, 'tcx, 'compilation, S: FlowStrategy> {
     /// Pointer Assignment Graph
     pub(crate) pag: PAG<Rc<CSPath>>,
     /// Call graph
-    pub call_graphs: Vec<CSCallGraph>,
+    pub call_graph: CSCallGraph,
 
     /// Records the functions that have been processed
     pub(crate) processed_funcs: HashSet<CSFuncId>,
