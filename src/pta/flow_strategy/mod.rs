@@ -20,7 +20,8 @@ pub trait FlowStrategy {
     fn get_flow_context_by_id(&self, context_id: ContextId) -> Rc<Context<Self::E>>;
     fn new_instance_flow_context(&mut self, callsite: &Rc<CSCallSite>, receiver: Option<&Rc<CSPath>>, path: &[CSCallSite]) -> Option<ContextId>;
     fn new_static_flow_context(&mut self, callsite: &Rc<CSCallSite>, path: &[CSCallSite]) -> ContextId;
-    fn handle_branch(&mut self, condition: bool, callsite: &Rc<CSCallSite>, path: &[CSCallSite]) -> ContextId; // New method for handling branches
+    fn handle_branch(&mut self, condition: bool, callsite: &Rc<CSCallSite>, path: &[CSCallSite]) -> ContextId; // For handling branches (if/else)
+    fn handle_switch(&mut self, cases: &[(Option<usize>, Rc<CSCallSite>)], default: Option<Rc<CSCallSite>>, path: &[CSCallSite]) -> Vec<ContextId>; // For switch statements
 }
 
 pub struct FlowInsensitive {}
@@ -54,6 +55,10 @@ impl FlowStrategy for FlowInsensitive {
 
     fn handle_branch(&mut self, _condition: bool, _callsite: &Rc<CSCallSite>, _path: &[CSCallSite]) -> ContextId {
         ContextId::new(0) // Default implementation, can be customized
+    }
+    
+    fn handle_switch(&mut self, _cases: &[(Option<usize>, Rc<CSCallSite>)], _default: Option<Rc<CSCallSite>>, _path: &[CSCallSite]) -> Vec<ContextId> {
+        vec![ContextId::new(0)] // Default implementation, can be customized
     }
 }
 
@@ -126,4 +131,23 @@ impl FlowStrategy for KFlowSensitive {
         };
         branch_context_id
     }
+
+    fn handle_switch(&mut self, cases: &[(Option<usize>, Rc<CSCallSite>)], default: Option<Rc<CSCallSite>>, path: &[CSCallSite]) -> Vec<ContextId> {
+        let mut contexts = Vec::new();
+        
+        // Iterate over each case and create a new flow context
+        for (_, case_callsite) in cases {
+            let context_id = self.new_flow_context(case_callsite, path);
+            contexts.push(context_id);
+        }
+        
+        // Handle the default case if it exists
+        if let Some(default_callsite) = default {
+            let default_context_id = self.new_flow_context(&default_callsite, path);
+            contexts.push(default_context_id);
+        }
+        
+        contexts // Return all created contexts
+    }
+
 }
