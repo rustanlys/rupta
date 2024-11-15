@@ -20,7 +20,7 @@ pub enum PathEnum {
     Value(i32), 
     Undef,
     /*  Ask about what pathes we should include?? Was thinking about just the functions, but 
-        we need to consider phi nodes? More a CFG pathing algo 
+        we need to consider phi nodes. Is this the same as the other path basically? 
     */
     
 }

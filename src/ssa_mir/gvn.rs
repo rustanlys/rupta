@@ -22,36 +22,38 @@ impl GlobalValueNumbering {
         }
     }
 
-    fn read_variable_recursive(&self, variable: &str, block: &Block) -> Option<Path> {
+    fn read_variable_recursive(&mut self, variable: &str, block: &Block) -> Option<Path> {
         if !self.sealed_blocks.contains(block) {
-            let phi = self.create_or_update_phi(variable, block);
-            return Some(phi)
+            // Incomplete CFG: create a phi function and register it
+            let val = Phi::new(block.clone());
+            self.incomplete_phis
+                .entry(block.clone())
+                .or_default()
+                .insert(variable.to_string(), val.clone());
+            Some(Path {
+                value: PathEnum::Undef,
+            })
+        } else if block.preds.len() == 1 {
+            // Single predecessor
+            self.read_variable(variable, &block.preds[0])
         } else {
-            return None
+            // Multiple predecessors
+            let mut phi = Phi::new(block.clone());
+            self.write_variable(variable.to_string(), block.clone(), Path {
+                value: PathEnum::Undef, // Create a placeholder for the Phi
+            });
+
+            let phi = self.add_phi_operands(variable, phi);
+            self.write_variable(variable.to_string(), block.clone(), Path {
+                value: PathEnum::Undef, // Update with final Phi value
+            });
+
+            Some(Path {
+                value: PathEnum::Undef,
+            })
         }
     }
 
-    fn create_or_update_phi(&mut self, variable: &str, block: &Block) -> Path {
-        let mut phi = Phi::new(block.clone());
-
-        if block.preds.len() == 1 {
-            let pred = &block.preds[0];
-            if let Some(value) = self.read_variable(variable, pred) {
-                return value;
-            }
-        }
-
-        self.write_variable(variable.to_string(), block.clone(), Path {
-            value: PathEnum::Value(0), 
-        });
-
-        phi = self.add_phi_operands(variable, phi);
-        self.write_variable(variable.to_string(), block.clone(), Path {
-            value: PathEnum::Value(1), 
-        });
-
-        return phi
-    }
 
     fn add_phi_operands(&mut self, variable: &str, mut phi: Phi) -> Phi {
         for pred in &phi.block.preds {
