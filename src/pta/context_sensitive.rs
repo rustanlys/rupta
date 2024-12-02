@@ -15,25 +15,29 @@ use rustc_middle::ty::TyCtxt;
 use super::context_strategy::KObjectSensitive;
 use super::propagator::propagator::Propagator;
 use super::PointerAnalysis;
+use crate::graph::call_graph::CSCallGraph;
 use crate::graph::func_pag::FuncPAG;
 use crate::graph::pag::*;
-use crate::graph::call_graph::CSCallGraph;
+use crate::info_collector::{get_pathbuf_from_filename_struct, CallSiteMetadata};
+use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::call_site::{AssocCallGroup, CSCallSite, CallSite, CallType};
 use crate::mir::context::{Context, ContextId};
-use crate::mir::function::{FuncId, CSFuncId};
-use crate::mir::analysis_context::AnalysisContext;
-use crate::mir::path::{Path, CSPath, PathEnum};
-use crate::pta::*;
+use crate::mir::function::{CSFuncId, FuncId};
+use crate::mir::path::{CSPath, Path, PathEnum};
 use crate::pta::context_strategy::ContextStrategy;
+use crate::pta::*;
 use crate::util::pta_statistics::ContextSensitiveStat;
 use crate::util::{self, chunked_queue, results_dumper};
 
-pub type CallSiteSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'pta, 'tcx, 'compilation, KCallSiteSensitive>;
+pub type CallSiteSensitivePTA<'pta, 'tcx, 'compilation> =
+    ContextSensitivePTA<'pta, 'tcx, 'compilation, KCallSiteSensitive>;
 /// The object-sensitive pointer analysis for Rust has not been throughly evaluated so far.
-pub type ObjectSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'pta, 'tcx, 'compilation, KObjectSensitive>;
+pub type ObjectSensitivePTA<'pta, 'tcx, 'compilation> =
+    ContextSensitivePTA<'pta, 'tcx, 'compilation, KObjectSensitive>;
 
 pub struct ContextSensitivePTA<'pta, 'tcx, 'compilation, S: ContextStrategy> {
     /// The analysis context
+    /// oub(crate) = 只在当前crate中为pub，对于外部crate还是不可见的
     pub(crate) acx: &'pta mut AnalysisContext<'tcx, 'compilation>,
     /// Points-to data
     pub(crate) pt_data: DiffPTDataTy,
@@ -60,7 +64,9 @@ pub struct ContextSensitivePTA<'pta, 'tcx, 'compilation, S: ContextStrategy> {
     ctx_strategy: S,
 }
 
-impl<'pta, 'tcx, 'compilation, S: ContextStrategy> Debug for ContextSensitivePTA<'pta, 'tcx, 'compilation, S> {
+impl<'pta, 'tcx, 'compilation, S: ContextStrategy> Debug
+    for ContextSensitivePTA<'pta, 'tcx, 'compilation, S>
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         "ContextSensitivePTA".fmt(f)
     }
@@ -100,7 +106,6 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     #[inline]
     pub fn get_context_by_id(&self, context_id: ContextId) -> Rc<Context<S::E>> {
         self.ctx_strategy.get_context_by_id(context_id)
-        
     }
     #[inline]
     pub fn get_empty_context_id(&mut self) -> ContextId {
@@ -111,11 +116,16 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     pub fn initialize(&mut self) {
         // add the entry point to the call graph
         let entry_point = self.acx.entry_point;
+        // 申请一个新的ContextId
         let empty_context_id = self.get_empty_context_id();
+        // 查询entry_point的FuncId，即其在self.acx.functions数组中的索引
         let entry_func_id = self.acx.get_func_id(entry_point, self.tcx().mk_args(&[]));
-        self.call_graph.add_node(CSFuncId::new(empty_context_id, entry_func_id));
+        //? initialize对self.call_graph做的唯一一个改动就是增加了entry_point的节点
+        self.call_graph
+            .add_node(CSFuncId::new(empty_context_id, entry_func_id));
 
         // process statements of reachable functions
+        // 好像是把入口函数找到之后就顺着它去找其他可达函数了
         self.process_reach_funcs();
     }
 
@@ -147,10 +157,10 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         }
     }
 
-    
     /// Process statements in reachable functions.
     fn process_reach_funcs(&mut self) {
         while let Some(func) = self.rf_iter.next() {
+            // println!("{:#?}", func);
             if !self.processed_funcs.contains(&func) {
                 let func_ref = self.acx.get_function_reference(func.func_id);
                 info!(
@@ -214,7 +224,8 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         for (callsite, callee) in &fpag.static_dispatch_callsites {
             let cs_callsite = self.mk_cs_callsite(callsite, func.cid);
             self.process_new_call(&cs_callsite, callee);
-            self.call_graph.set_callsite_type(callsite.into(), CallType::StaticDispatch);
+            self.call_graph
+                .set_callsite_type(callsite.into(), CallType::StaticDispatch);
         }
 
         // For special callsites, we have summary the effects. Therefore we only add call edge
@@ -225,8 +236,14 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
             let empty_cid = self.special_callsite_context(&cs_callsite, callee);
             let cs_callee = self.mk_cs_func(*callee, empty_cid);
             self.call_graph.add_edge(cs_callsite.into(), func, cs_callee);
+            // let caller_ref = self.acx.get_function_reference(func.func_id);
+            // let caller_def_id = caller_ref.def_id;
+            // let callee_ref = self.acx.get_function_reference(*callee);
+            // let callee_def_id = callee_ref.def_id;
+            // println!("{:?} --> {:?}", caller_def_id, callee_def_id);
             // This may classify some special dynamic calls into static calls
-            self.call_graph.set_callsite_type(callsite.into(), CallType::StaticDispatch);
+            self.call_graph
+                .set_callsite_type(callsite.into(), CallType::StaticDispatch);
         }
 
         // For std::ops::call, dynamic and fnptr callsites, add them to the dynamic_calls and fnptr_calls maps.
@@ -234,21 +251,27 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
             let cs_dyn_fn_obj = self.mk_cs_path(dyn_fn_obj, func.cid);
             let cs_callsite = self.mk_cs_callsite(callsite, func.cid);
             let dyn_node_id = self.dyn_node_id(&cs_dyn_fn_obj);
-            self.assoc_calls.add_dynamic_fntrait_call(dyn_node_id, cs_callsite);
-            self.call_graph.set_callsite_type(callsite.into(), CallType::DynamicFnTrait);
+            self.assoc_calls
+                .add_dynamic_fntrait_call(dyn_node_id, cs_callsite);
+            self.call_graph
+                .set_callsite_type(callsite.into(), CallType::DynamicFnTrait);
         }
         for (dyn_var, callsite) in &fpag.dynamic_dispatch_callsites {
             let cs_dyn_var = self.mk_cs_path(dyn_var, func.cid);
             let cs_callsite = self.mk_cs_callsite(callsite, func.cid);
             let dyn_node_id = self.dyn_node_id(&cs_dyn_var);
-            self.assoc_calls.add_dynamic_dispatch_call(dyn_node_id, cs_callsite);
-            self.call_graph.set_callsite_type(callsite.into(), CallType::DynamicDispatch);
+            self.assoc_calls
+                .add_dynamic_dispatch_call(dyn_node_id, cs_callsite);
+            self.call_graph
+                .set_callsite_type(callsite.into(), CallType::DynamicDispatch);
         }
         for (fn_ptr, callsite) in &fpag.fnptr_callsites {
             let cs_fn_ptr = self.mk_cs_path(fn_ptr, func.cid);
             let cs_callsite = self.mk_cs_callsite(callsite, func.cid);
-            self.assoc_calls.add_fnptr_call(self.pag.get_or_insert_node(&cs_fn_ptr), cs_callsite);
-            self.call_graph.set_callsite_type(callsite.into(), CallType::FnPtr);
+            self.assoc_calls
+                .add_fnptr_call(self.pag.get_or_insert_node(&cs_fn_ptr), cs_callsite);
+            self.call_graph
+                .set_callsite_type(callsite.into(), CallType::FnPtr);
         }
     }
 
@@ -270,14 +293,19 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                 }
                 let self_ref: &Rc<CSPath> = callsite.args.get(0).expect("invalid arguments");
                 let self_ref_id = self.pag.get_or_insert_node(self_ref);
-                self.assoc_calls.add_static_dispatch_instance_call(self_ref_id, callsite.clone(), *callee);
-            } else { // move self
+                self.assoc_calls
+                    .add_static_dispatch_instance_call(self_ref_id, callsite.clone(), *callee);
+            } else {
+                // move self
                 let instance = callsite.args.get(0).expect("invalid arguments");
-                if let Some(callee_cid) = self.ctx_strategy.new_instance_call_context(callsite, Some(instance)) {
+                if let Some(callee_cid) = self
+                    .ctx_strategy
+                    .new_instance_call_context(callsite, Some(instance))
+                {
                     let cs_callee = CSFuncId::new(callee_cid, *callee);
                     self.add_call_edge(callsite, &cs_callee);
                 }
-            } 
+            }
         } else {
             let callee_cid = self.ctx_strategy.new_static_call_context(callsite);
             let cs_callee = CSFuncId::new(callee_cid, *callee);
@@ -300,7 +328,10 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
 
     fn process_new_call_instances(&mut self, new_call_instances: &Vec<(Rc<CSCallSite>, Rc<CSPath>, FuncId)>) {
         for (callsite, instance, callee_id) in new_call_instances {
-            if let Some(callee_cid) = self.ctx_strategy.new_instance_call_context(callsite, Some(instance)) {
+            if let Some(callee_cid) = self
+                .ctx_strategy
+                .new_instance_call_context(callsite, Some(instance))
+            {
                 let cs_callee = CSFuncId::new(callee_cid, *callee_id);
                 self.add_call_edge(callsite, &cs_callee);
             }
@@ -313,31 +344,101 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         if !self.call_graph.add_edge(callsite.into(), caller, *callee) {
             return;
         }
+        // 利用acx把FuncId转换为DefId，这样函数的所有信息都能知道
+        let caller_ref = self.acx.get_function_reference(caller.func_id);
+        let caller_def_id = caller_ref.def_id;
+        let callee_ref = self.acx.get_function_reference(callee.func_id);
+        let callee_def_id = callee_ref.def_id;
+        // println!("{:?} --> {:?}", caller_def_id, callee_def_id);
+
+        // callsite.location里有什么？
+        // rustc_middle::mir::Location可配合tcx找到span
+        let call_location = callsite.location;
+        let caller_mir = self.acx.tcx.optimized_mir(caller_def_id);
+        // let call_span = caller_mir.source_info(call_location).span;
+        // ! 之前的call_span的获得方法有问题，现在好了
+        let call_block = &caller_mir.basic_blocks[call_location.block];
+        let call_span = if call_location.statement_index < call_block.statements.len() {
+            call_block.statements[call_location.statement_index].source_info.span
+        } else {
+            call_block.terminator().source_info.span
+        };
+        let source_map = self.acx.tcx.sess.source_map();
+        let callsite_metadata = match source_map.lookup_line(call_span.lo()) {
+            Ok(source_and_line) => {
+                let source_file = source_and_line.sf;
+                // 别忘记，这儿的行号和列号全是从0开始的
+                let line_number = 1 + source_and_line.line;
+                // println!(
+                //     "Callsite: {:?} calls {:?} at {:?} line {}",
+                //     caller_ref.to_string(),
+                //     callee_ref.to_string(),
+                //     source_file.name,
+                //     line_number
+                // );
+                // 构造CallSiteMetadata
+                CallSiteMetadata {
+                    caller_def_id,
+                    callee_def_id,
+                    caller_file_path: match get_pathbuf_from_filename_struct(&source_file.name) {
+                        Ok(pathbuf) => Some(pathbuf),
+                        Err(err_msg) => {
+                            eprintln!("Error while locating caller_file_path (lookup_line success): {}", err_msg);
+                            None
+                        }
+                    },
+                    caller_line_num: line_number,
+                }
+            }
+            Err(source_file_only) => {
+                // 无行号信息，应该不是来自LocalPath的crate中发生的函数调用
+                // println!(
+                //     "Callsite: {:?} calls {:?} at {:?} line UNKNOWN",
+                //     caller_ref.to_string(),
+                //     callee_ref.to_string(),
+                //     source_file_only.name
+                // );
+                CallSiteMetadata {
+                    caller_def_id,
+                    callee_def_id,
+                    caller_file_path: match get_pathbuf_from_filename_struct(&source_file_only.name) {
+                        Ok(pathbuf) => Some(pathbuf),
+                        Err(err_msg) => {
+                            eprintln!("Error while locating caller_file_path (lookup_line error): {}", err_msg);
+                            None
+                        }
+                    },
+                    caller_line_num: 0,
+                }
+            }
+        };
+        self.acx.overall_metadata.callsite_metadata.insert(callsite_metadata);
+
+        // 以下部分掌管比较细化的边，例如从实参指向形参的边，
+        // 和从返回值指向存储返回值的变量的有向边，
+        // 我们可以暂时不管。
         let new_inter_proc_edges = self.pag.add_inter_procedural_edges(self.acx, callsite, *callee);
         for edge in new_inter_proc_edges {
             self.inter_proc_edges_queue.push(edge);
         }
     }
 
-
     fn mk_cs_path(&mut self, path: &Rc<Path>, cid: ContextId) -> Rc<CSPath> {
         match path.value() {
             PathEnum::Parameter { .. }
             | PathEnum::LocalVariable { .. }
-            | PathEnum::ReturnValue { .. } 
+            | PathEnum::ReturnValue { .. }
             | PathEnum::Auxiliary { .. }
             | PathEnum::QualifiedPath { .. }
-            | PathEnum::OffsetPath { .. } => {
-                CSPath::new_cs_path(cid, path.clone())
-            }
+            | PathEnum::OffsetPath { .. } => CSPath::new_cs_path(cid, path.clone()),
             PathEnum::HeapObj { .. } => {
-                // Directly use the context of the method for the heap objects 
+                // Directly use the context of the method for the heap objects
                 CSPath::new_cs_path(cid, path.clone())
             }
             PathEnum::Constant
             | PathEnum::StaticVariable { .. }
             | PathEnum::PromotedConstant { .. }
-            | PathEnum::Function(..) 
+            | PathEnum::Function(..)
             | PathEnum::PromotedStrRefArray
             | PathEnum::PromotedArgumentV1Array
             | PathEnum::Type(..) => {
@@ -354,7 +455,10 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
 
     fn mk_cs_callsite(&mut self, callsite: &Rc<CallSite>, cid: ContextId) -> Rc<CSCallSite> {
         Rc::new(CSCallSite::new(
-            CSFuncId { cid, func_id: callsite.func },
+            CSFuncId {
+                cid,
+                func_id: callsite.func,
+            },
             callsite.location,
             callsite
                 .args
@@ -374,12 +478,11 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     pub fn finalize(&self) {
         // dump call graph, points-to results
         results_dumper::dump_results(self.acx, &self.call_graph, &self.pt_data, &self.pag);
-        
+
         // dump pta statistics
         let pta_stat = ContextSensitiveStat::new(self);
         pta_stat.dump_stats();
     }
-
 }
 
 impl<'pta, 'tcx, 'compilation, S: ContextStrategy> PointerAnalysis<'tcx, 'compilation>
@@ -387,7 +490,6 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> PointerAnalysis<'tcx, 'compil
 {
     /// Analyze the crate currently being compiled, using the information given in compiler and tcx.
     fn analyze(&mut self) {
-
         let now = Instant::now();
 
         // Initialization for the analysis.
@@ -405,6 +507,5 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> PointerAnalysis<'tcx, 'compil
 
         // Finalize the analysis.
         self.finalize();
-
     }
 }

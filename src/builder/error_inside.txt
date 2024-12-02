@@ -1,0 +1,7 @@
+Error: No Cargo.toml found: /home/endericedragon/.rustup/toolchains/nightly-2024-02-03-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/compiler/rustc_session/src/config.rs
+Error: No Cargo.toml found: /home/endericedragon/.rustup/toolchains/nightly-2024-02-03-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/compiler/rustc_driver_impl/src/lib.rs
+Error: Virtual: /rust/deps/hashbrown-0.14.3/src/raw/mod.rs
+Error: No Cargo.toml found: /home/endericedragon/.rustup/toolchains/nightly-2024-02-03-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/compiler/rustc_errors/src/lib.rs
+Error: No Cargo.toml found: /home/endericedragon/.rustup/toolchains/nightly-2024-02-03-x86_64-unknown-linux-gnu/lib/rustlib/src/
+Error: No Cargo.toml found: /home/endericedragon/.rustup/toolchains/nightly-2024-02-03-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/compiler/rustc_error_messages/src/lib.rs
+Error: Virtual: /rust/deps/tracing-core-0.1.30/src/metadata.rs
