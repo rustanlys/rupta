@@ -95,8 +95,15 @@ fn call_cargo() {
 }
 
 fn call_cargo_on_each_package_target(package: &Package) {
+    let lib_only = has_arg_flag("--lib");
     for target in &package.targets {
-        let kind = target.kind.get(0).expect("bad cargo metadata: target::kind");
+        let kind = target
+            .kind
+            .first()
+            .expect("bad cargo metadata: target::kind");
+        if lib_only && kind != "lib" {
+            continue;
+        }
         call_cargo_on_target(&target.name, kind);
     }
 }
@@ -130,6 +137,9 @@ fn call_cargo_on_target(target: &String, kind: &str) {
     for arg in args.by_ref() {
         if arg == "--" {
             break;
+        }
+        if arg == "--lib" {
+            continue;
         }
         cmd.arg(arg);
     }
