@@ -75,7 +75,7 @@ pub fn ci_call_graph_stat<W: Write>(acx: &AnalysisContext, call_graph: &CallGrap
     }
 
     stat_writer
-        .write_all("Call Graph Statistics: \n".as_bytes())
+        .write_all("12 Call Graph Statistics: \n".as_bytes())
         .expect("Unable to write data");
     stat_writer
         .write_all(format!("#Reachable functions: {}\n", num_reach_funcs).as_bytes())
@@ -211,7 +211,7 @@ pub fn cs_call_graph_stat<W: Write>(acx: &AnalysisContext, call_graph: &CallGrap
     }
 
     stat_writer
-        .write_all("Call Graph Statistics: \n".as_bytes())
+        .write_all("122 Call Graph Statistics: \n".as_bytes())
         .expect("Unable to write data");
     stat_writer
         .write_all(format!("#Reachable functions (CS): {}\n", num_cs_reach_funcs).as_bytes())
