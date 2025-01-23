@@ -133,14 +133,14 @@ impl<'mir> SSABuilder<'mir> {
     }
 
     // Placeholder for adding a phi node to a block (to be implemented later)
-    fn add_phi_node_to_block(&mut self, _block: BasicBlock) {
-        unimplemented!()
-    }
+    // fn add_phi_node_to_block(&mut self, _block: BasicBlock) {
+    //     unimplemented!()
+    // }
 
-    // Placeholder for checking if a block contains a phi node (to be implemented later)
-    fn frontier_block_contains_phi(&self, _block: BasicBlock) -> bool {
-        unimplemented!()
-    }
+    // // Placeholder for checking if a block contains a phi node (to be implemented later)
+    // fn frontier_block_contains_phi(&self, _block: BasicBlock) -> bool {
+    //     unimplemented!()
+    // }
 }
 
 impl<'mir> Debug for SSABuilder<'mir> {
