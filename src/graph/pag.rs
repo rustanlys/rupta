@@ -5,6 +5,7 @@
 
 use log::*;
 use petgraph::graph::{DefaultIx, EdgeIndex, NodeIndex};
+
 use petgraph::Graph;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -22,6 +23,7 @@ use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::path::{PathEnum, ProjectionElems};
 use crate::util::bit_vec::Idx;
 use crate::util::chunked_queue::{self, ChunkedQueue};
+use crate::mir::ssa_build;
 
 // Unique identifiers for graph node and edges.
 pub type PAGNodeId = NodeIndex<DefaultIx>;
@@ -487,6 +489,11 @@ impl<P: PAGPath> PAG<P> {
         // Build pag for this function.
         let mut fpag = FuncPAG::new(func_id);
         let mir = acx.tcx.optimized_mir(def_id);
+        // Insert SSA builder
+        let mut ssa_builder = ssa_build::SSABuilder::new(mir);
+        ssa_builder.ssa_build();
+
+        // Insert SSA builder
         let mut builder = fpag_builder::FuncPAGBuilder::new(acx, func_id, mir, &mut fpag);
         builder.build();
 
@@ -528,6 +535,14 @@ impl<P: PAGPath> PAG<P> {
             let mut fpag = FuncPAG::new(func_id);
             let def = rustc_middle::ty::InstanceDef::Item(def_id);
             let mir = acx.tcx.instance_mir(def);
+            
+            // Insert SSA builder
+
+            let mut ssa_builder = ssa_build::SSABuilder::new(mir);
+            ssa_builder.ssa_build();
+
+            // Insert SSA builder
+
             let mut builder = fpag_builder::FuncPAGBuilder::new(acx, func_id, mir, &mut fpag);
             builder.build();
             self.func_pags.insert(func_id, fpag);

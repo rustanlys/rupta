@@ -284,7 +284,7 @@ fn dump_dyn_calls_(
         }
     }
     dyn_calls_writer
-        .write_all(format!("#Fnptr calls:\n").as_bytes())
+        .write_all(format!("#Fnptr 3  calls:\n").as_bytes())
         .expect("Unable to write data");
     for (callsite, callees) in fnptr_calls {
         let caller_func_ref = acx.get_function_reference(callsite.func);
