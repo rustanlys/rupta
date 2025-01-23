@@ -5,7 +5,7 @@
 
 use log::*;
 use petgraph::graph::{DefaultIx, EdgeIndex, NodeIndex};
-use petgraph::visit::Dfs;
+
 use petgraph::Graph;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeSet, HashMap, HashSet};

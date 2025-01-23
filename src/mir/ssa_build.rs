@@ -47,7 +47,7 @@ impl<'mir> SSABuilder<'mir> {
 
     // Compute dominator tree for SSA CFG
     fn compute_dominator_tree(&self, cfg: &ControlFlowGraph) -> DominatorTree {
-        let n = cfg.len();
+        let _n = cfg.len();
         let mut dom: HashMap<BasicBlock, HashSet<BasicBlock>> = HashMap::new();
         let mut semi: HashMap<BasicBlock, BasicBlock> = HashMap::new();
         let mut ancestor: HashMap<BasicBlock, BasicBlock> = HashMap::new();
@@ -133,12 +133,12 @@ impl<'mir> SSABuilder<'mir> {
     }
 
     // Placeholder for adding a phi node to a block (to be implemented later)
-    fn add_phi_node_to_block(&mut self, block: BasicBlock) {
+    fn add_phi_node_to_block(&mut self, _block: BasicBlock) {
         unimplemented!()
     }
 
     // Placeholder for checking if a block contains a phi node (to be implemented later)
-    fn frontier_block_contains_phi(&self, block: BasicBlock) -> bool {
+    fn frontier_block_contains_phi(&self, _block: BasicBlock) -> bool {
         unimplemented!()
     }
 }
