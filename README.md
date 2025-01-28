@@ -36,7 +36,7 @@ as detailed in our CC'24 paper (https://dl.acm.org/doi/10.1145/3640537.3641574).
 You can run RUPTA for **a Rust project** using the binary `cargo-pta`:
 
 ```sh
-$ cargo-pta pta -- --entry <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-overall-metadata <overall-metadata-path> --dump-pts <pts-path>
+$ cargo-pta pta -- --entry-func <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-overall-metadata <overall-metadata-path> --dump-pts <pts-path>
 ```
 
 You can also use the command `cargo pta` instead of `cargo-pta pta` if RUPTA has been installed into `cargo`.
@@ -44,7 +44,7 @@ You can also use the command `cargo pta` instead of `cargo-pta pta` if RUPTA has
 Alternatively, you can run RUPTA for **a single file** using the binary `pta`:
 
 ```sh
-$ pta <path-to-file> --entry <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-overall-metadata <overall-metadata-path> --dump-pts <pts-path>
+$ pta <path-to-file> --entry-func <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-overall-metadata <overall-metadata-path> --dump-pts <pts-path>
 ```
 
 Options:
