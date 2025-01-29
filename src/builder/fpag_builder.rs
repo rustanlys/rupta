@@ -125,9 +125,9 @@ impl<'pta, 'tcx, 'compilation> FuncPAGBuilder<'pta, 'tcx, 'compilation> {
         //     crate_metadata_usize,
         // );
 
-        let func_metadata = FuncMetadata::from_info(acx, def_id_of_func);
+        // let func_metadata = FuncMetadata::from_info(acx, def_id_of_func);
 
-        acx.overall_metadata.func_metadata.insert(func_metadata);
+        // acx.overall_metadata.func_metadata.insert(func_metadata);
         //? 折腾结束，您继续
 
         // if func_ref.promoted.is_none() {

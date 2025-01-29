@@ -3,18 +3,22 @@
 // This source code is licensed under the GNU license found in the
 // LICENSE file in the root directory of this source tree.
 
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::io::{BufWriter, Write};
 
 use rustc_hir::def_id::DefId;
 
 use crate::graph::call_graph::CallGraph;
-use crate::mir::call_site::{BaseCallSite, CallType, CSBaseCallSite};
-use crate::mir::function::{FuncId, CSFuncId};
+use crate::info_collector::FuncMetadata;
 use crate::mir::analysis_context::AnalysisContext;
+use crate::mir::call_site::{BaseCallSite, CSBaseCallSite, CallType};
+use crate::mir::function::{CSFuncId, FuncId};
 
-
-pub fn ci_call_graph_stat<W: Write>(acx: &AnalysisContext, call_graph: &CallGraph<FuncId, BaseCallSite>, stat_writer: &mut BufWriter<W>) {
+pub fn ci_call_graph_stat<W: Write>(
+    acx: &AnalysisContext,
+    call_graph: &CallGraph<FuncId, BaseCallSite>,
+    stat_writer: &mut BufWriter<W>,
+) {
     let num_reach_funcs = call_graph.reach_funcs.len();
     let num_call_graph_edges = call_graph.graph.edge_count();
     // statically resolved calls
@@ -136,8 +140,11 @@ pub fn ci_call_graph_stat<W: Write>(acx: &AnalysisContext, call_graph: &CallGrap
         .expect("Unable to write data");
 }
 
-
-pub fn cs_call_graph_stat<W: Write>(acx: &AnalysisContext, call_graph: &CallGraph<CSFuncId, CSBaseCallSite>, stat_writer: &mut BufWriter<W>) {
+pub fn cs_call_graph_stat<W: Write>(
+    acx: &AnalysisContext,
+    call_graph: &CallGraph<CSFuncId, CSBaseCallSite>,
+    stat_writer: &mut BufWriter<W>,
+) {
     let num_cs_reach_funcs = call_graph.reach_funcs.len();
     let num_cs_call_graph_edges = call_graph.graph.edge_count();
     // statically resolved calls
@@ -162,6 +169,12 @@ pub fn cs_call_graph_stat<W: Write>(acx: &AnalysisContext, call_graph: &CallGrap
         reach_funcs_defids.insert(func_ref.def_id);
     }
     let num_reach_funcs_defids = reach_funcs_defids.len();
+    // 将统计可达函数的过程从FuncPAGBuilder::new搬到这里
+    for def_id in reach_funcs_defids.iter() {
+        let func_metadata = FuncMetadata::from_info(acx, def_id);
+        acx.overall_metadata.func_metadata.insert(func_metadata);
+    }
+
     let num_ci_reach_funcs = ci_reach_funcs.len();
 
     let mut ci_call_edges: HashMap<BaseCallSite, HashSet<FuncId>> = HashMap::new();
@@ -174,7 +187,7 @@ pub fn cs_call_graph_stat<W: Write>(acx: &AnalysisContext, call_graph: &CallGrap
             callees.insert(ci_callee);
         }
     }
-    
+
     let mut num_ci_call_graph_edges = 0;
     // We may create multiple callsites for a dynamic Fn* trait callsite since the new callsites may have
     // different arguments. We treat all the callsites created from the same dynamic Fn* trait callsite
@@ -220,7 +233,13 @@ pub fn cs_call_graph_stat<W: Write>(acx: &AnalysisContext, call_graph: &CallGrap
         .write_all(format!("#Reachable functions (CI): {}\n", num_ci_reach_funcs).as_bytes())
         .expect("Unable to write data");
     stat_writer
-        .write_all(format!("#Reachable unmonomorphized functions (CI): {}\n", num_reach_funcs_defids).as_bytes())
+        .write_all(
+            format!(
+                "#Reachable unmonomorphized functions (CI): {}\n",
+                num_reach_funcs_defids
+            )
+            .as_bytes(),
+        )
         .expect("Unable to write data");
     stat_writer
         .write_all(format!("#Call graph edges (CS): {}\n", num_cs_call_graph_edges).as_bytes())

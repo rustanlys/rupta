@@ -75,7 +75,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitiveStat<'pta, 't
         ContextSensitiveStat { pta }
     }
 
-    pub fn dump_stats(&self) {
+    pub fn dump_stats(&mut self) {
         let mut stat_writer = BufWriter::new(
             Box::new(std::io::stdout()) as Box<dyn Write>
         );

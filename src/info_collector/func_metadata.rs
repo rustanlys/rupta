@@ -30,7 +30,10 @@ impl FuncMetadata {
         }
     }
 
-    pub fn from_info(acx: &mut analysis_context::AnalysisContext, def_id_of_func: rustc_hir::def_id::DefId) -> Self {
+    pub fn from_info(
+        acx: &mut analysis_context::AnalysisContext,
+        def_id_of_func: rustc_hir::def_id::DefId,
+    ) -> Self {
         let cur_session = acx.tcx.sess;
         let source_map = cur_session.source_map();
         let span = acx.tcx.def_span(def_id_of_func);
@@ -67,7 +70,7 @@ impl FuncMetadata {
             None
         };
 
-        FuncMetadata::new(
+        let func_metadata = FuncMetadata::new(
             def_id_of_func,
             match source_file_path {
                 Ok(path_buf) => Some(path_buf),
@@ -75,7 +78,9 @@ impl FuncMetadata {
             },
             line_num,
             crate_metadata_idx,
-        )
+        );
+
+        func_metadata
     }
 }
 

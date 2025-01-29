@@ -382,9 +382,25 @@ Call Graph Statistics:
 
 其中的Reachable functions几项引起了我们的注意。在Rupta的源代码中搜索，会发现CS、CI两项分别来自这两处：
 
-```rust
+- CS
+  ```rust
+  call_graph.reach_funcs.len()
+  ```
+- CI
+  ```rust
+  let mut ci_reach_funcs: HashSet<FuncId> = HashSet::new();
+  let mut reach_funcs_defids: HashSet<DefId> = HashSet::new();
+  for func in call_graph.reach_funcs.iter() {
+      let ci_func_id = func.func_id;
+      ci_reach_funcs.insert(ci_func_id);
+      let func_ref = acx.get_function_reference(ci_func_id);
+      reach_funcs_defids.insert(func_ref.def_id);
+  }
+  let num_reach_funcs_defids = reach_funcs_defids.len();
+  let num_ci_reach_funcs = ci_reach_funcs.len();
+  ```
 
-```
+不难观察到，CI就是去重版的CS。我们只需取用CI统计的数据即可。
 
 ### Crate信息从哪里来？
 
