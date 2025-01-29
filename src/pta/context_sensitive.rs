@@ -10,6 +10,7 @@ use std::time::Instant;
 
 use itertools::Itertools;
 use log::*;
+use rustc_hir::def_id::DefId;
 use rustc_middle::ty::TyCtxt;
 
 use super::context_strategy::KObjectSensitive;
@@ -18,7 +19,7 @@ use super::PointerAnalysis;
 use crate::graph::call_graph::CSCallGraph;
 use crate::graph::func_pag::FuncPAG;
 use crate::graph::pag::*;
-use crate::info_collector::{get_pathbuf_from_filename_struct, CallSiteMetadata};
+use crate::info_collector::{get_pathbuf_from_filename_struct, CallSiteMetadata, FuncMetadata};
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::call_site::{AssocCallGroup, CSCallSite, CallSite, CallType};
 use crate::mir::context::{Context, ContextId};
@@ -359,7 +360,9 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         // ! 之前的call_span的获得方法有问题，现在好了
         let call_block = &caller_mir.basic_blocks[call_location.block];
         let call_span = if call_location.statement_index < call_block.statements.len() {
-            call_block.statements[call_location.statement_index].source_info.span
+            call_block.statements[call_location.statement_index]
+                .source_info
+                .span
         } else {
             call_block.terminator().source_info.span
         };
@@ -383,7 +386,10 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                     caller_file_path: match get_pathbuf_from_filename_struct(&source_file.name) {
                         Ok(pathbuf) => Some(pathbuf),
                         Err(err_msg) => {
-                            eprintln!("Error while locating caller_file_path (lookup_line success): {}", err_msg);
+                            eprintln!(
+                                "Error while locating caller_file_path (lookup_line success): {}",
+                                err_msg
+                            );
                             None
                         }
                     },
@@ -404,7 +410,10 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                     caller_file_path: match get_pathbuf_from_filename_struct(&source_file_only.name) {
                         Ok(pathbuf) => Some(pathbuf),
                         Err(err_msg) => {
-                            eprintln!("Error while locating caller_file_path (lookup_line error): {}", err_msg);
+                            eprintln!(
+                                "Error while locating caller_file_path (lookup_line error): {}",
+                                err_msg
+                            );
                             None
                         }
                     },
@@ -412,7 +421,10 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                 }
             }
         };
-        self.acx.overall_metadata.callsite_metadata.insert(callsite_metadata);
+        self.acx
+            .overall_metadata
+            .callsite_metadata
+            .insert(callsite_metadata);
 
         // 以下部分掌管比较细化的边，例如从实参指向形参的边，
         // 和从返回值指向存储返回值的变量的有向边，
@@ -475,7 +487,20 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     }
 
     /// Finalize the analysis.
-    pub fn finalize(&self) {
+    pub fn finalize(&mut self) {
+        // calculate reachable functions and insert them into self.acx.overall_metadata.func_metadata
+        let mut reach_funcs_defids: HashSet<DefId> = HashSet::new();
+        for func in self.call_graph.reach_funcs.iter() {
+            let ci_func_id = func.func_id;
+            let func_ref = self.acx.get_function_reference(ci_func_id);
+            reach_funcs_defids.insert(func_ref.def_id);
+        }
+        // 将统计可达函数的过程从FuncPAGBuilder::new搬到这里
+        for def_id in reach_funcs_defids.iter() {
+            let func_metadata = FuncMetadata::from_info(self.acx, *def_id);
+            self.acx.overall_metadata.func_metadata.insert(func_metadata);
+        }
+
         // dump call graph, points-to results
         results_dumper::dump_results(self.acx, &self.call_graph, &self.pt_data, &self.pag);
 

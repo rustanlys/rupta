@@ -170,10 +170,10 @@ pub fn cs_call_graph_stat<W: Write>(
     }
     let num_reach_funcs_defids = reach_funcs_defids.len();
     // 将统计可达函数的过程从FuncPAGBuilder::new搬到这里
-    for def_id in reach_funcs_defids.iter() {
-        let func_metadata = FuncMetadata::from_info(acx, def_id);
-        acx.overall_metadata.func_metadata.insert(func_metadata);
-    }
+    // for def_id in reach_funcs_defids.iter() {
+    //     let func_metadata = FuncMetadata::from_info(acx, def_id);
+    //     acx.overall_metadata.func_metadata.insert(func_metadata);
+    // }
 
     let num_ci_reach_funcs = ci_reach_funcs.len();
 
