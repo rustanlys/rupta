@@ -25,7 +25,7 @@ impl FuncMetadata {
         Self {
             def_id,
             define_path,
-            line_num: line_num,
+            line_num,
             crate_metadata_idx,
         }
     }

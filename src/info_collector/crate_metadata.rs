@@ -31,6 +31,8 @@ impl CrateMetadata {
         let mut cmd = MetadataCommand::new();
         cmd.manifest_path(manifest_path);
         cmd.current_dir(working_dir); // default to current directory
+        // 遇到 v4 的 Cargo.lock 文件时，需要加上 -Znext-lockfile-bump 选项，否则会报错。
+        cmd.other_options(vec!["-Znext-lockfile-bump".to_string()]);
 
         let metadata = cmd.exec().unwrap();
         Self {

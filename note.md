@@ -108,18 +108,6 @@ pub type CallSiteSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'p
 >
 > 继续往上追踪，发现这个`finalize`方法在`impl PointerAnalysis for ContextSensitivePTA`的`analyze`方法中被调用。后者的构成在上文中已经讨论完毕。因此，有必要分析调用图数据结构`self.call_graph`是如何在`initialize`和`propagate`方法中被修改的了。
 
-### `initialize`方法及其修改计划
-
-该方法对`self.call_graph`做的唯一改动是增加了入口函数所代表的节点。我们可以以这里为突破口，尝试获取关于函数的更多信息，例如：
-
-- 函数所在的源文件是哪个？
-- 函数所属的crate叫什么？
-- 函数所属的crate的Cargo.toml文件在哪里？
-
-注意到有一个叫做`AnalysisContext::get_func_id`的方法，它接收一个`DefId`和一个奇怪的泛型参数列表（目前意义不明），能够计算返回一个FuncId。我们去看看这个方法的工作逻辑是怎样的，说不定能受到启发。
-
-在src/pta/context_sensitive.rs的process_reach_funcs中加了输出。
-
 ## 总体修改思路
 
 之前，在开题报告中，我们说过我们希望我们的分析工具可以给出如下信息：
@@ -373,6 +361,30 @@ let (block_indices, loop_anchors) = get_sorted_block_indices(body_visitor.mir, d
     // 现在已经可以得知该语句的位置了。
   }
   ```
+
+### Callable的信息从哪里来？
+
+在总体思路中，我们准备使用 `src/builder/fpga_builder.rs` 中的 `FuncPAGBuilder` 类来获取可达函数的 `DefId` ，从而进一步获得可达函数的信息。但是在实际操作中发现，利用这个方法获得的可达函数 **少于** 输出的JSON文件中 `calls` 字段出现的函数数量。因此，有必要寻找一个更为准确的统计手段。
+
+查阅Rupta分析结束时的输出，会发现形如如下几行的统计信息：
+
+```
+##########################################################
+Call Graph Statistics:
+#Reachable functions (CS): 30656
+#Reachable functions (CI): 11244
+#Reachable unmonomorphized functions (CI): 4450
+#Call graph edges (CS): 65349
+#Call graph edges (CI): 30655
+#Statically resolved calls: 30403
+...
+```
+
+其中的Reachable functions几项引起了我们的注意。在Rupta的源代码中搜索，会发现CS、CI两项分别来自这两处：
+
+```rust
+
+```
 
 ### Crate信息从哪里来？
 
