@@ -161,19 +161,15 @@ pub fn cs_call_graph_stat<W: Write>(
 
     // Count reachable functions with distinct defid
     let mut ci_reach_funcs: HashSet<FuncId> = HashSet::new();
-    let mut reach_funcs_defids: HashSet<DefId> = HashSet::new();
+    // let mut reach_funcs_defids: HashSet<DefId> = HashSet::new();
     for func in call_graph.reach_funcs.iter() {
         let ci_func_id = func.func_id;
         ci_reach_funcs.insert(ci_func_id);
-        let func_ref = acx.get_function_reference(ci_func_id);
-        reach_funcs_defids.insert(func_ref.def_id);
+        // let func_ref = acx.get_function_reference(ci_func_id);
+        // reach_funcs_defids.insert(func_ref.def_id);
     }
-    let num_reach_funcs_defids = reach_funcs_defids.len();
-    // 将统计可达函数的过程从FuncPAGBuilder::new搬到这里
-    // for def_id in reach_funcs_defids.iter() {
-    //     let func_metadata = FuncMetadata::from_info(acx, def_id);
-    //     acx.overall_metadata.func_metadata.insert(func_metadata);
-    // }
+    // let num_reach_funcs_defids = reach_funcs_defids.len();
+    let num_reach_funcs_defids = acx.overall_metadata.func_metadata.len();
 
     let num_ci_reach_funcs = ci_reach_funcs.len();
 

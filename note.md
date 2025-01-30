@@ -402,6 +402,28 @@ Call Graph Statistics:
 
 不难观察到，CI就是去重版的CS。我们只需取用CI统计的数据即可。
 
+最后，将收集信息的流程放到了 `src/pta/context_sensitive.rs` 的 `ContextSensitivePTA::finalize` 函数中。
+
+```rust
+impl ContextSensitivePTA {
+    pub fn finalize(&mut self) {
+        // calculate reachable functions and insert them into self.acx.overall_metadata.func_metadata
+        let mut reach_funcs_defids: HashSet<DefId> = HashSet::new();
+        for func in self.call_graph.reach_funcs.iter() {
+            let ci_func_id = func.func_id;
+            let func_ref = self.acx.get_function_reference(ci_func_id);
+            reach_funcs_defids.insert(func_ref.def_id);
+        }
+        // 将统计可达函数的过程从FuncPAGBuilder::new搬到这里
+        for def_id in reach_funcs_defids.iter() {
+            let func_metadata = FuncMetadata::from_info(self.acx, *def_id);
+            self.acx.overall_metadata.func_metadata.insert(func_metadata);
+        }
+        // -- snip --
+    }
+}
+```
+
 ### Crate信息从哪里来？
 
 Rupta和MIRAI都没有非常仔细地收集有关Crate的信息，MIRAI的`CrateVisitor`也未能提供任何帮助。
