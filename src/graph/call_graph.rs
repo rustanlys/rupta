@@ -150,11 +150,12 @@ impl<F: CGFunction, S: CGCallSite> CallGraph<F, S> {
         return None;
     }
 
+    /// 给定一条边的EdgeIndex，以`(CGNodeId, CGNodeId)`的形式返回这条边的起点和终点。
     pub fn edge_endpoints(&self, edge_id: EdgeIndex) -> Option<(CGNodeId, CGNodeId)> {
         self.graph.edge_endpoints(edge_id)
     }
 
-    /// Get the set of callees for a callsite.
+    /// 从一个Callsite中获取其调用的所有函数，即所有callee
     pub fn get_callees(&self, callsite: &S) -> HashSet<F> {
         if let Some(edges) = self.callsite_to_edges.get(callsite) {
             edges
@@ -179,13 +180,17 @@ impl<F: CGFunction, S: CGCallSite> CallGraph<F, S> {
     /// The edge is a call from `caller_id` to `callee_id` at `callsite`.
     /// Returns false if the edge already existed, and true otherwise.
     pub fn add_edge(&mut self, callsite: S, caller_id: F, callee_id: F) -> bool {
+        // 既然要加边，那么肯定是要先保证边的端点确实在图中
         let caller_node = self.get_or_insert_node(caller_id);
         let callee_node = self.get_or_insert_node(callee_id);
 
-        // Add this edge when it is not contained in the call graph
+        // 如果调用图中没有这条边，才会增加这条边，
+        // 否则啥也不干并返回false
         let callees = self.get_callees(&callsite);
         if !callees.contains(&callee_id) {
+            //? 新建边啦！！
             let edge = CallGraphEdge::new(callsite);
+            //? 通过这里可以看出来，是先有边CallGraphEdge，然后才申请的边编号EdgeIdx
             let edge_id = self.graph.add_edge(caller_node, callee_node, edge);
             self.callsite_to_edges
                 .entry(callsite)
