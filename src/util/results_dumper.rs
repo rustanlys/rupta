@@ -18,7 +18,7 @@ use crate::mir::function::FuncId;
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::path::PathEnum;
 use crate::pta::DiffPTDataTy;
-use crate::pta::context_strategy::ContextStrategy;
+use crate::pta::strategies::context_strategy::ContextStrategy;
 use crate::pts_set::points_to::PointsToSet;
 use crate::util;
 

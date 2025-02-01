@@ -58,6 +58,10 @@ fn make_options_parser() -> Command<'static> {
             .takes_value(false)
             .hide(true)
             .help("Disable the cast optimization that constrains an object cast from a simple pointer type."))
+        .arg(Arg::new("stack-filtering")
+            .long("stack-filtering")
+            .takes_value(false)
+            .help("Enable stack filtering in pointer analysis."))
         .arg(Arg::new("dump-stats")
             .long("dump-stats")
             .takes_value(false)
@@ -106,6 +110,7 @@ pub struct AnalysisOptions {
     pub context_depth: u32,
     // options for handling cast propagation
     pub cast_constraint: bool,
+    pub stack_filtering: bool,
     
     pub dump_stats: bool,
     pub call_graph_output: Option<String>,
@@ -125,6 +130,7 @@ impl Default for AnalysisOptions {
             pta_type: PTAType::CallSiteSensitive,
             context_depth: 1,
             cast_constraint: true,
+            stack_filtering: false,
             dump_stats: true,
             call_graph_output: None,
             pts_output: None,
@@ -208,6 +214,7 @@ impl AnalysisOptions {
         }
 
         self.cast_constraint = !matches.contains_id("no-cast-constraint");
+        self.stack_filtering = matches.contains_id("stack-filtering");
         
         self.dump_stats = matches.contains_id("dump-stats");
         self.call_graph_output = matches.get_one::<String>("call-graph-output").cloned();
