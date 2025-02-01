@@ -80,7 +80,7 @@ See [LICENSE](LICENSE)
 
 ## Reference
 
-We have released the RUPTA source code to support the wider research community and facilitate advancements in the field. We hope it is valuable to your projects. Please credit our contribution by citing the following paper in any publications or presentations that utilize our tool:
+We have released the RUPTA source code to support the wider research community and facilitate advancements in the field. We hope it is valuable to your projects. Please credit our contribution by citing our papers in any publications or presentations that utilize our tool:
 ```
 @inproceedings{li2024context,
   title={A Context-Sensitive Pointer Analysis Framework for Rust and Its Application to Call Graph Construction},
