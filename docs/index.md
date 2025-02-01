@@ -28,7 +28,7 @@ GPLv3
 
 ## References
 
-You are welcome to use RUPTA for research and development purposes under the included license. Please acknowledge the use of this tool by citing the following papers:
+You are welcome to use RUPTA for research and development purposes under the included license. Please acknowledge the use of this tool by citing our papers:
 
 Wei Li, Dongjie He, Wenguang Chen and Jingling Xue. [Stack Filtering: Elevating Precision and Efficiency in Rust Pointer Analysis](), IEEE/ACM International Symposium on Code Generation and Optimization (CGO'25). 
 
