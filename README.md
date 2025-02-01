@@ -91,6 +91,13 @@ We have released the RUPTA source code to support the wider research community a
   publisher={ACM},
   doi = {10.1145/3640537.3641574}
 }
+
+@inproceedings{li2024context,
+  title={Stack Filtering: Elevating Precision and Efficiency in Rust Pointer Analysis}, 
+  author={Li, Wei and He, Dongjie and Chen, Wenguang and Xue, Jingling},
+  booktitle={Proceedings of the 21st Annual IEEE/ACM International Symposium on Code Generation and Optimization},
+  year={2025},
+}
 ```
 
 ## Contacts
