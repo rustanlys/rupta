@@ -44,7 +44,7 @@ You can also use the command `cargo pta` instead of `cargo-pta pta` if RUPTA has
 Alternatively, you can run RUPTA for **a single file** using the binary `pta`:
     
 ```sh
-$ pta <path-to-file> --entry <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-pts <pts-path>
+$ pta <path-to-file> --entry-func <entry-function-name> --pta-type <pta-type> --context-depth <N> --dump-call-graph <call-graph-path> --dump-pts <pts-path>
 ```
 
 Options:
