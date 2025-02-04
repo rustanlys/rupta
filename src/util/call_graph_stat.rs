@@ -9,7 +9,6 @@ use std::io::{BufWriter, Write};
 use rustc_hir::def_id::DefId;
 
 use crate::graph::call_graph::CallGraph;
-use crate::info_collector::FuncMetadata;
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::call_site::{BaseCallSite, CSBaseCallSite, CallType};
 use crate::mir::function::{CSFuncId, FuncId};
