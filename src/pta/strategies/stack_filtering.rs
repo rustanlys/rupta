@@ -19,7 +19,6 @@ use crate::pts_set::points_to::PointsToSet;
 
 use super::context_strategy::{KCallSiteSensitive, ContextStrategy};
 
-
 pub trait RowRelation: std::fmt::Debug + std::clone::Clone + std::marker::Send {
     fn new_empty() -> Self;
     fn with_capacity(capacity: usize) -> Self;
@@ -214,8 +213,7 @@ impl<F> StackFilter<F> where
 {
     pub fn new(call_graph: CallGraph<FuncId, BaseCallSite>) -> Self {
         let now = Instant::now();
-        let reach_relation = 
-            FunctionReachabilityAnalysis::compute_func_reach_relations_mt(&call_graph);
+        let reach_relation =  FunctionReachabilityAnalysis::compute_func_reach_relations_mt(&call_graph);
         let fra_time = now.elapsed();
         StackFilter {
             call_graph,
@@ -279,7 +277,8 @@ impl<F> StackFilter<F> where
         &self, 
         acx: &AnalysisContext, 
         current_func: F, 
-        target_path: &P
+        target_path: &P,
+        rceus: bool
     ) -> bool {
         match target_path.value() {
             PathEnum::HeapObj { .. } => { return true; }
@@ -306,6 +305,10 @@ impl<F> StackFilter<F> where
                 return true;
             }
 
+            // We apply only naive reachability relation for Rceus analysis.
+            if rceus {
+                return self.naive_reachability_relation(path_container_func, current_func);
+            }
             return current_func.is_reachable_from(&path_container_func, self);
         } 
         return true;
@@ -384,7 +387,12 @@ impl SFReachable for CSFuncId {
 
                 if match_suffix_and_prefix(&to_call_chain, &from_call_chain) {
                     return true;
-                }
+                } 
+                // else {
+                //     println!("Call chain from {:?} to {:?} does not match, checking reachability relation", from, self);
+                //     println!("  From call chain: {:?}", from_call_chain);
+                //     println!("  To call chain: {:?}", to_call_chain);
+                // }
             }
 
             let from_id = stack_filter.call_graph.func_nodes.get(&(*from).into()).unwrap();

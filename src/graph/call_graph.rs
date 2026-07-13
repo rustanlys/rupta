@@ -9,13 +9,12 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Debug};
 use std::hash::Hash;
-
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::call_site::{BaseCallSite, CallType, CSBaseCallSite};
 use crate::mir::function::{FuncId, CSFuncId};
+use rustc_middle::mir::Location;
 use crate::util::chunked_queue::{self, ChunkedQueue};
 use crate::util::dot::Dot;
-
 /// Unique identifiers for call graph nodes.
 pub type CGNodeId = NodeIndex<DefaultIx>;
 /// Unique identifiers for call graph edges.
@@ -26,6 +25,8 @@ pub type CSCallGraph = CallGraph<CSFuncId, CSBaseCallSite>;
 
 pub trait CGFunction: Copy + Clone + PartialEq + Eq + Hash + Debug {
     fn dot_fmt(&self, acx: &AnalysisContext, f: &mut fmt::Formatter) -> fmt::Result;
+
+    fn get_func_id(&self) -> FuncId;
 }
 
 impl CGFunction for FuncId {
@@ -34,6 +35,10 @@ impl CGFunction for FuncId {
             "{}",
             acx.get_function_reference(*self).to_string()
         ))
+    }
+
+    fn get_func_id(&self) -> FuncId {
+        *self
     }
 }
 
@@ -44,32 +49,52 @@ impl CGFunction for CSFuncId {
             acx.get_function_reference(self.func_id).to_string(),
         ))
     }
+
+    fn get_func_id(&self) -> FuncId {
+        self.func_id
+    }
 }
 
 pub trait CGCallSite: Copy + Clone + PartialEq + Eq + Hash + Debug {
     fn dot_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result;
+
+    fn get_location(&self) -> &Location;
 }
 
 impl CGCallSite for BaseCallSite {
+
     fn dot_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_fmt(format_args!("{:?}", self.location))
+    }
+
+    fn get_location(&self) -> &Location {
+        &self.location
     }
 }
 
 impl CGCallSite for CSBaseCallSite {
+
     fn dot_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_fmt(format_args!("{:?}", self.location))
+    }
+
+    fn get_location(&self) -> &Location {
+        &self.location
     }
 }
 
 #[derive(Debug)]
 pub struct CallGraphNode<F: CGFunction> {
     pub(crate) func: F,
+    pub(crate) req_cs: bool, 
 }
 
 impl<F: CGFunction> CallGraphNode<F> {
     pub fn new(func: F) -> Self {
-        CallGraphNode { func }
+        CallGraphNode { 
+            func, 
+            req_cs: false,
+        }
     }
 }
 
@@ -120,7 +145,7 @@ impl<F: CGFunction, S: CGCallSite> CallGraph<F, S> {
 
     /// Helper function to get a node or insert a new
     /// node if it does not exist in the map.
-    fn get_or_insert_node(&mut self, func: F) -> CGNodeId {
+    pub fn get_or_insert_node(&mut self, func: F) -> CGNodeId {
         match self.func_nodes.entry(func) {
             Entry::Occupied(o) => o.get().to_owned(),
             Entry::Vacant(v) => {
@@ -206,6 +231,7 @@ impl<F: CGFunction, S: CGCallSite> CallGraph<F, S> {
     pub fn reach_funcs_iter(&self) -> chunked_queue::IterCopied<F> {
         self.reach_funcs.iter_copied()
     }
+
 
     /// Produce a dot file representation of the call graph
     /// for displaying with Graphviz.

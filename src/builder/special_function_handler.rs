@@ -80,12 +80,62 @@ lazy_static! {
     };
 }
 
+
+lazy_static! {
+    static ref PRECISION_CRITICAL_FUNCTIONS: HashSet<KnownNames> = {
+        let mut set = HashSet::new();
+        set.insert(KnownNames::StdIntrinsicsTransmute);
+        set.insert(KnownNames::StdIntrinsicsOffset);
+        set.insert(KnownNames::StdIntrinsicsArithOffset);
+        set.insert(KnownNames::StdPtrConstPtrCast);
+        set.insert(KnownNames::StdPtrConstPtrAdd);
+        set.insert(KnownNames::StdPtrConstPtrSub);
+        set.insert(KnownNames::StdPtrConstPtrOffset);
+        set.insert(KnownNames::StdPtrConstPtrByteAdd);
+        set.insert(KnownNames::StdPtrConstPtrByteSub);
+        set.insert(KnownNames::StdPtrConstPtrByteOffset);
+        set.insert(KnownNames::StdPtrConstPtrWrappingAdd);
+        set.insert(KnownNames::StdPtrConstPtrWrappingSub);
+        set.insert(KnownNames::StdPtrConstPtrWrappingOffset);
+        set.insert(KnownNames::StdPtrConstPtrWrappingByteAdd);
+        set.insert(KnownNames::StdPtrConstPtrWrappingByteSub);
+        set.insert(KnownNames::StdPtrConstPtrWrappingByteOffset);
+        set.insert(KnownNames::StdPtrMutPtrCast);
+        set.insert(KnownNames::StdPtrMutPtrAdd);
+        set.insert(KnownNames::StdPtrMutPtrSub);
+        set.insert(KnownNames::StdPtrMutPtrOffset);
+        set.insert(KnownNames::StdPtrMutPtrByteAdd);
+        set.insert(KnownNames::StdPtrMutPtrByteSub);
+        set.insert(KnownNames::StdPtrMutPtrByteOffset);
+        set.insert(KnownNames::StdPtrMutPtrWrappingAdd);
+        set.insert(KnownNames::StdPtrMutPtrWrappingSub);
+        set.insert(KnownNames::StdPtrMutPtrWrappingOffset);
+        set.insert(KnownNames::StdPtrMutPtrWrappingByteAdd);
+        set.insert(KnownNames::StdPtrMutPtrWrappingByteSub);
+        set.insert(KnownNames::StdPtrMutPtrWrappingByteOffset);
+        set.insert(KnownNames::StdPtrNonNullAsPtr);
+        set.insert(KnownNames::StdPtrUniqueNewUnchecked);
+        set.insert(KnownNames::StdResultMapErr);
+        set.insert(KnownNames::RustRealloc);
+        set.insert(KnownNames::StdAllocRealloc);
+        set.insert(KnownNames::StdAllocAllocatorGrow);
+        set.insert(KnownNames::StdAllocAllocatorGrowZeroed);
+        set.insert(KnownNames::StdAllocAllocatorShrink);
+        set
+    };
+}
+
 /// Returns true if the function with `def_id` is specially handled.
 pub fn is_specially_handled_function(acx: &mut AnalysisContext, def_id: DefId) -> bool {
     let known_name = acx.get_known_name_for(def_id);
     SPECIALLY_HANDLED_FUNCTIONS.contains(&known_name)
 }
 
+
+pub fn is_specially_handled_precision_critical_function(acx: &mut AnalysisContext, def_id: DefId) -> bool {
+    let known_name = acx.get_known_name_for(def_id);
+    PRECISION_CRITICAL_FUNCTIONS.contains(&known_name)
+}
 /// Handling calls to special functions.
 /// 
 /// Returns true if this callee function is handled as a special function.

@@ -129,6 +129,10 @@ impl<E: ContextElement> ContextCache<E> {
     pub fn context_list(&self) -> &IndexVec<ContextId, Rc<Context<E>>> {
         &self.context_list
     }
+
+    pub fn get_context_iter(&self) -> std::collections::hash_map::Iter<'_, Rc<Context<E>>, ContextId> {
+        self.context_to_index_map.iter()
+    }
 }
 
 

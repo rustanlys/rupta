@@ -11,7 +11,6 @@ use std::time::Duration;
 use itertools::Itertools;
 use log::*;
 use rustc_middle::ty::TyCtxt;
-
 use super::*;
 use super::strategies::context_strategy::{ContextStrategy, KObjectSensitive};
 use super::strategies::stack_filtering::StackFilter;
@@ -24,9 +23,11 @@ use crate::mir::context::{Context, ContextId};
 use crate::mir::function::{FuncId, CSFuncId};
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::path::{Path, CSPath, PathEnum};
-use crate::rta::rta::RapidTypeAnalysis;
+use crate::pre_analysis::precision_critical_func_identification::precision_critical_func_identification::PrecCritFnIdent;
+use crate::pre_analysis::rta::rta::RapidTypeAnalysis;
 use crate::util::pta_statistics::ContextSensitiveStat;
 use crate::util::{self, chunked_queue, results_dumper};
+
 
 pub type CallSiteSensitivePTA<'pta, 'tcx, 'compilation> = ContextSensitivePTA<'pta, 'tcx, 'compilation, KCallSiteSensitive>;
 /// The object-sensitive pointer analysis for Rust has not been throughly evaluated so far.
@@ -60,6 +61,7 @@ pub struct ContextSensitivePTA<'pta, 'tcx, 'compilation, S: ContextStrategy> {
     ctx_strategy: S,
 
     pub stack_filter: Option<StackFilter<CSFuncId>>,
+
     pub pre_analysis_time: Duration,
 }
 
@@ -223,12 +225,10 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
     /// Process a resolved call according to the call type
     fn process_new_call(&mut self, callsite: &Rc<CSCallSite>, callee: &FuncId) {
         let callee_def_id = self.acx.get_function_reference(*callee).def_id;
-        // an instance call
         if util::has_self_parameter(self.tcx(), callee_def_id) {
-            // borrow self (&self or &mut self)
             if util::has_self_ref_parameter(self.tcx(), callee_def_id) {
-                // the instance should be the pointed-to object of the self pointer
-                if let Some(callee_cid) = self.ctx_strategy.new_instance_call_context(callsite, None) {
+                // borrow self (&self or &mut self) — the instance is the pointed-to object of the self pointer
+                if let Some(callee_cid) = self.ctx_strategy.new_instance_call_context(callsite, None, *callee) {
                     let cs_callee = CSFuncId::new(callee_cid, *callee);
                     self.add_call_edge(callsite, &cs_callee);
                 }
@@ -237,21 +237,21 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
                 self.assoc_calls.add_static_dispatch_instance_call(self_ref_id, callsite.clone(), *callee);
             } else { // move self
                 let instance = callsite.args.get(0).expect("invalid arguments");
-                if let Some(callee_cid) = self.ctx_strategy.new_instance_call_context(callsite, Some(instance)) {
+                if let Some(callee_cid) = self.ctx_strategy.new_instance_call_context(callsite, Some(instance), *callee) {
                     let cs_callee = CSFuncId::new(callee_cid, *callee);
                     self.add_call_edge(callsite, &cs_callee);
                 }
-            } 
+            }
         } else {
-            let callee_cid = self.ctx_strategy.new_static_call_context(callsite);
+            let callee_cid = self.ctx_strategy.new_static_call_context(callsite, *callee);
             let cs_callee = CSFuncId::new(callee_cid, *callee);
             self.add_call_edge(callsite, &cs_callee);
         }
     }
 
-    fn special_callsite_context(&mut self, callsite: &Rc<CSCallSite>, _callee: &FuncId) -> ContextId {
-        // Currently we treat all special callsites as statical callsites
-        self.ctx_strategy.new_static_call_context(callsite)
+    fn special_callsite_context(&mut self, callsite: &Rc<CSCallSite>, callee: &FuncId) -> ContextId {
+        // Currently we treat all special callsites as static callsites
+        self.ctx_strategy.new_static_call_context(callsite, *callee)
     }
 
     // Add new call edges to pag
@@ -262,9 +262,11 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> ContextSensitivePTA<'pta, 'tc
         self.process_reach_funcs();
     }
 
+    
     fn process_new_call_instances(&mut self, new_call_instances: &Vec<(Rc<CSCallSite>, Rc<CSPath>, FuncId)>) {
+        
         for (callsite, instance, callee_id) in new_call_instances {
-            if let Some(callee_cid) = self.ctx_strategy.new_instance_call_context(callsite, Some(instance)) {
+            if let Some(callee_cid) = self.ctx_strategy.new_instance_call_context(callsite, Some(instance), *callee_id) {
                 let cs_callee = CSFuncId::new(callee_cid, *callee_id);
                 self.add_call_edge(callsite, &cs_callee);
             }
@@ -347,16 +349,32 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> PointerAnalysis<'tcx, 'compil
     for ContextSensitivePTA<'pta, 'tcx, 'compilation, S>
 {
     fn pre_analysis(&mut self) {
-        if !self.acx.analysis_options.stack_filtering {
+        let stack_filtering = self.acx.analysis_options.stack_filtering;
+        let rceus = self.acx.analysis_options.rceus;
+        if !stack_filtering && !rceus {
             return;
         }
         info!("Start pre-analysis");
+        println!("Starting Rapid Type Analysis...");
         let mut rta = RapidTypeAnalysis::new(&mut self.acx);
         rta.analyze();
         self.pre_analysis_time += rta.analysis_time;
-        self.stack_filter = Some(StackFilter::new(rta.call_graph));
-        self.ctx_strategy.with_stack_filter(self.stack_filter.as_mut().unwrap());
-        self.pre_analysis_time += self.stack_filter.as_ref().unwrap().fra_time();
+
+        if rceus {
+            let mut pcfi = PrecCritFnIdent::new(&mut rta);
+            pcfi.analyze();
+            self.pre_analysis_time += pcfi.analysis_time;
+            let cs_funcs = std::mem::take(&mut pcfi.cs_funcs);
+            let func_pfg_map = std::mem::take(&mut pcfi.func_pfg_map);
+            self.ctx_strategy.set_prec_crit_fn_ident_data(cs_funcs, func_pfg_map);
+        }
+
+        if stack_filtering {
+            self.stack_filter = Some(StackFilter::new(rta.call_graph));
+            self.ctx_strategy.with_stack_filter(self.stack_filter.as_mut().unwrap());
+            self.pre_analysis_time += self.stack_filter.as_ref().unwrap().fra_time();
+        }
+        
         println!("Pre-analysis time {}", 
             humantime::format_duration(self.pre_analysis_time).to_string()
         );
@@ -369,7 +387,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> PointerAnalysis<'tcx, 'compil
         let empty_context_id = self.get_empty_context_id();
         let entry_func_id = self.acx.get_func_id(entry_point, self.tcx().mk_args(&[]));
         self.call_graph.add_node(CSFuncId::new(empty_context_id, entry_func_id));
-
+ 
         // process statements of reachable functions
         self.process_reach_funcs();
     }
@@ -397,8 +415,12 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> PointerAnalysis<'tcx, 'compil
             if new_calls.is_empty() && new_call_instances.is_empty() {
                 break;
             } else {
+                // Note: RCEUS is for call-site sensitivity only,
+                // so new call instances become normal new calls there.
                 self.process_new_calls(&new_calls);
-                self.process_new_call_instances(&new_call_instances);
+                if !self.acx.analysis_options.rceus {
+                    self.process_new_call_instances(&new_call_instances);
+                }
             }
         }
     }
@@ -407,7 +429,7 @@ impl<'pta, 'tcx, 'compilation, S: ContextStrategy> PointerAnalysis<'tcx, 'compil
     fn finalize(&self) {
         // dump call graph, points-to results
         results_dumper::dump_results(self.acx, &self.call_graph, &self.pt_data, &self.pag);
-        
+      
         // dump pta statistics
         let pta_stat = ContextSensitiveStat::new(self);
         pta_stat.dump_stats();

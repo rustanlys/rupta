@@ -24,7 +24,6 @@ pub struct BodyVisitor<'a, 'rta, 'tcx, 'compilation> {
     pub(crate) rta: &'rta mut RapidTypeAnalysis<'a, 'tcx, 'compilation>,
     pub(crate) func_id: FuncId,
     pub mir: &'tcx mir::Body<'tcx>,
-
     /// For specializing the generic type in the method.
     substs_specializer: SubstsSpecializer<'tcx>,
     encountered_statics: HashSet<DefId>,
@@ -67,7 +66,7 @@ impl<'a, 'rta, 'tcx, 'compilation> BodyVisitor<'a, 'rta, 'tcx, 'compilation> {
             self.visit_baisc_block(bb);
         }
     }
-
+    
     fn visit_baisc_block(&mut self, bb: mir::BasicBlock,) {
         let mir::BasicBlockData {
             ref statements,
@@ -258,6 +257,9 @@ impl<'a, 'rta, 'tcx, 'compilation> BodyVisitor<'a, 'rta, 'tcx, 'compilation> {
         debug!("Call func {:?}, generic_args: {:?}", callee_def_id, gen_args);
 
         if special_function_handler::is_specially_handled_function(self.acx(), *callee_def_id) {
+            let is_precision_critical = special_function_handler::is_specially_handled_precision_critical_function(self.acx(), *callee_def_id);
+                
+
             let callsite = BaseCallSite::new(self.func_id, location);
             
             // Special handlings for thread spawn functions
@@ -278,7 +280,9 @@ impl<'a, 'rta, 'tcx, 'compilation> BodyVisitor<'a, 'rta, 'tcx, 'compilation> {
             self.rta.add_static_callsite(callsite);
             self.rta.add_call_edge(callsite, callee_func_id);
             self.rta.specially_handled_functions.insert(callee_func_id);
-
+            if is_precision_critical {
+                self.rta.specially_handled_precision_critical_functions.insert(callee_func_id);
+            }
             return;
         }
 

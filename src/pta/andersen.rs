@@ -20,7 +20,7 @@ use crate::mir::function::FuncId;
 use crate::mir::analysis_context::AnalysisContext;
 use crate::mir::path::Path;
 use crate::pta::*;
-use crate::rta::rta::RapidTypeAnalysis;
+use crate::pre_analysis::rta::rta::RapidTypeAnalysis;
 use crate::util::chunked_queue;
 use crate::util::pta_statistics::AndersenStat;
 use crate::util::results_dumper;
@@ -172,6 +172,7 @@ impl<'pta, 'tcx, 'compilation> AndersenPTA<'pta, 'tcx, 'compilation> {
             self.call_graph.set_callsite_type(callsite.into(), CallType::FnPtr);
         }
     }
+
 
     // Add new call edges to pag
     fn process_new_calls(&mut self, new_calls: &Vec<(Rc<CallSite>, FuncId)>) {

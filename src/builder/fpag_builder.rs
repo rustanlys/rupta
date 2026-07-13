@@ -23,7 +23,6 @@ use rustc_middle::ty;
 use rustc_middle::ty::{Const, Ty, TyCtxt, TyKind, GenericArgsRef};
 use rustc_span::source_map::Spanned;
 use rustc_target::abi::FieldIdx;
-
 use crate::builder::{call_graph_builder, special_function_handler};
 use crate::graph::func_pag::FuncPAG;
 use crate::graph::pag::PAGEdgeEnum;

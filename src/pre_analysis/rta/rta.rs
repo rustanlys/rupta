@@ -14,7 +14,6 @@ use crate::util::{type_util, chunked_queue, results_dumper};
 
 use super::body_visitor::BodyVisitor;
 
-
 pub struct RapidTypeAnalysis<'a, 'tcx, 'compilation> {
     /// The analysis context
     pub(crate) acx: &'a mut AnalysisContext<'tcx, 'compilation>,
@@ -27,6 +26,8 @@ pub struct RapidTypeAnalysis<'a, 'tcx, 'compilation> {
     /// Records the functions that have been visited
     pub(crate) visited_functions: HashSet<FuncId>,
     pub(crate) specially_handled_functions: HashSet<FuncId>,
+    pub(crate) specially_handled_precision_critical_functions: HashSet<FuncId>,
+
 
     pub static_callsites: HashSet<BaseCallSite>,
     pub dyn_callsites: HashMap<Ty<'tcx>, HashSet<(BaseCallSite, DefId, GenericArgsRef<'tcx>)>>,
@@ -52,6 +53,7 @@ impl<'a, 'tcx, 'compilation> RapidTypeAnalysis<'a, 'tcx, 'compilation> {
             rf_iter,
             visited_functions: HashSet::new(),
             specially_handled_functions: HashSet::new(),
+            specially_handled_precision_critical_functions: HashSet::new(),
             static_callsites: HashSet::new(),
             dyn_callsites: HashMap::new(),
             dyn_fntrait_callsites: HashMap::new(),
@@ -78,8 +80,6 @@ impl<'a, 'tcx, 'compilation> RapidTypeAnalysis<'a, 'tcx, 'compilation> {
             FunctionReference::new_function_reference(entry_point, vec![])
         );
         self.call_graph.add_node(entry_func_id);
-
-        // process terminators of reachable functions
         self.iteratively_process_reachable_functions();
 
         self.analysis_time = now.elapsed();
@@ -88,6 +88,7 @@ impl<'a, 'tcx, 'compilation> RapidTypeAnalysis<'a, 'tcx, 'compilation> {
             "Rapid Type Analysis time: {}", 
             humantime::format_duration(self.analysis_time).to_string()
         );
+
     }
 
     fn iteratively_process_reachable_functions(&mut self) {
@@ -108,8 +109,6 @@ impl<'a, 'tcx, 'compilation> RapidTypeAnalysis<'a, 'tcx, 'compilation> {
                 let func_ref = self.acx.get_function_reference(func_id);
                 let def_id = func_ref.def_id;
                 let generic_args = &func_ref.generic_args;
-
-                // We don't count specially handled functions as we do not process them in pta
                 if self.specially_handled_functions.contains(&func_id) {
                     self.visited_functions.insert(func_id);
                     continue;
@@ -120,9 +119,10 @@ impl<'a, 'tcx, 'compilation> RapidTypeAnalysis<'a, 'tcx, 'compilation> {
                     self.visited_functions.insert(func_id);
                     continue;
                 }
-
+                
                 self.promote_constants(def_id, generic_args);
                 let mir = self.tcx().optimized_mir(def_id);
+
                 let mut bv = BodyVisitor::new(self, func_id, mir);
                 bv.visit_body();
                 self.visited_functions.insert(func_id);

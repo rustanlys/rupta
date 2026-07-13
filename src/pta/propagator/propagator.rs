@@ -73,7 +73,7 @@ pub struct Propagator<'pta, 'tcx, 'compilation, F, P: PAGPath> {
 }
 
 impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> where 
-    F: Copy + Into<FuncId> + std::cmp::Eq + std::hash::Hash + SFReachable,
+    F: Copy + Into<FuncId> + std::cmp::Eq + std::hash::Hash + SFReachable + std::fmt::Debug,
     P: PAGPath<FuncTy = F>,
 {
     /// Constructor
@@ -439,8 +439,14 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
                     replaced_args,
                 ) {
                     let func_id = self.acx.get_func_id(callee_def_id, gen_args);
-                    // self.add_new_call(&dyn_callsite, &func_id);
-                    self.add_new_call_instance(&dyn_callsite, &pointee_path, &func_id);
+                    if self.acx.analysis_options.rceus {
+                        // Since Rceus is for callsite-sensitive analyses only,
+                        // we only add the callsite for dynamic dispatch calls.
+                        self.add_new_call(&dyn_callsite, &func_id);
+                    } else {
+                        // For other context-insensitive or object-sensitive analyses, we add the call instance
+                        self.add_new_call_instance(&dyn_callsite, &pointee_path, &func_id);
+                    }
                 } else {
                     warn!(
                         "Could not resolve function: {:?}, {:?}",
@@ -672,8 +678,14 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
                             if self.tcx().is_mir_available(resolved_def_id) {
                                 // The pointee type cannot be FnDef, FnPtr, Closure, therefore its mir is supposed to be available
                                 let func_id = self.acx.get_func_id(resolved_def_id, instance_args);
-                                // self.add_new_call(&dynamic_fntrait_callsite, &func_id);
-                                self.add_new_call_instance(&dynamic_fntrait_callsite, &pointee_path, &func_id);
+                                if self.acx.analysis_options.rceus {
+                                    // Since Rceus is for callsite-sensitive analyses only,
+                                    // we only add the callsite for dynamic dispatch calls.
+                                    self.add_new_call(&dynamic_fntrait_callsite, &func_id);
+                                } else {
+                                    // For other context-insensitive or object-sensitive analyses, we add the call instance
+                                    self.add_new_call_instance(&dynamic_fntrait_callsite, &pointee_path, &func_id);
+                                }
                             } else {
                                 warn!("Unavailable mir for def_id: {:?}", resolved_def_id);
                             }
@@ -871,6 +883,7 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
                         continue;
                     }
                 } 
+
                 if matches!(regularized_path.value(), PathEnum::HeapObj { .. }) {
                     // For heap objects that have a concretized type, we do not let it been cast from 
                     // a simple type to other incompatible types.
@@ -1153,10 +1166,10 @@ impl<'pta, 'tcx, 'compilation, F, P> Propagator<'pta, 'tcx, 'compilation, F, P> 
             } 
             if let Some(sf) = stack_filter  {
                 if let Some(&edge_func) = sf.get_container_func_of_edge(&edge_id) {
-                    return !sf.is_potentially_alive(acx, edge_func, pointee);
+                    let rceus = acx.analysis_options.rceus;
+                    return !sf.is_potentially_alive(acx, edge_func, pointee, rceus);
                 } 
             } 
-
             return false;
         }
     }

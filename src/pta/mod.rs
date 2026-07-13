@@ -12,7 +12,7 @@ use rustc_middle::ty::TyCtxt;
 
 use self::andersen::AndersenPTA;
 use self::context_sensitive::ContextSensitivePTA;
-use self::strategies::context_strategy::KCallSiteSensitive;
+use self::strategies::context_strategy::{KCallSiteSensitive, RCEUSCallSiteSensitive};
 use crate::graph::pag::*;
 use crate::mir::function::FuncId;
 use crate::mir::analysis_context::AnalysisContext;
@@ -61,7 +61,6 @@ pub trait PointerAnalysis<'tcx, 'compilation> {
             "Analysis time: {}",
             humantime::format_duration(elapsed).to_string()
         );
-
         self.finalize();
     }
 }
@@ -89,12 +88,12 @@ impl PTACallbacks {
         if let Some(mut acx) = AnalysisContext::new(&compiler.sess, tcx, self.options.clone()) {
             let mut pta: Box<dyn PointerAnalysis> = match self.options.pta_type {
                 PTAType::CallSiteSensitive => {
-                    Box::new(
-                        ContextSensitivePTA::new(
-                            &mut acx, 
-                            KCallSiteSensitive::new(self.options.context_depth as usize)
-                        ),
-                    )
+                    let k = self.options.context_depth as usize;
+                    if self.options.rceus {
+                        Box::new(ContextSensitivePTA::new(&mut acx, RCEUSCallSiteSensitive::new(k)))
+                    } else {
+                        Box::new(ContextSensitivePTA::new(&mut acx, KCallSiteSensitive::new(k)))
+                    }
                 }
                 PTAType::Andersen => Box::new(AndersenPTA::new(&mut acx)),
             };
